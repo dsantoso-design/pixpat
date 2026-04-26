@@ -220,9 +220,9 @@
     <div class="row"><label>Radius</label>
       <input id="aFalloff" type="range" min="20" max="1200" value="420" step="2">
       <input class="v" id="aFalloffV" type="number" min="20" max="1200" step="2"></div>
-    <div class="row"><label>Inner</label>
-      <input id="aInner" type="range" min="0" max="1200" value="0" step="2">
-      <input class="v" id="aInnerV" type="number" min="0" max="1200" step="2"></div>
+    <div class="row"><label>Pull</label>
+      <input id="aPull" type="range" min="-1" max="1" value="0" step="0.01">
+      <input class="v" id="aPullV" type="number" min="-1" max="1" step="0.01"></div>
     <div class="row"><label>Curve</label>
       <input id="aCurve" type="range" min="0.3" max="4" value="1.7" step="0.05">
       <input class="v" id="aCurveV" type="number" min="0.3" max="4" step="0.05"></div>
@@ -272,7 +272,7 @@ const S = {
   size:42, scale:0.23, corner:50, jitter:0, stroke:0,
   attractors:[], selected:-1,
   tool:'point', draft:null, mouseW:[0,0],
-  aMode:'scale', aStrength:-1, aFalloff:420, aInner:0, aCurve:1.7,
+  aMode:'scale', aStrength:-1, aFalloff:420, aPull:0, aCurve:1.7,
   bg:'#f1e4c9', fg:'#0d0e10', fill:true,
   muteAttractors:false, hideAttractors:false,
   zoom:1, panX:0, panY:0,
@@ -420,41 +420,55 @@ function flattenEllipse(a, steps){
 }
 
 function fields(x,y){
-  const out = {scale:0, hole:0};
+  const out = {scale:0, hole:0, px:0, py:0};
   if(S.muteAttractors) return out;
   for(const a of S.attractors){
     if(a.muted) continue;
-    const inner = clamp(a.inner || 0, 0, Math.max(0, a.r - 0.001));
-    const span  = Math.max(0.001, a.r - inner);
-    let v;
+    let v, t, d, nx=0, ny=0;          // (nx,ny) = nearest attractor point in world coords
     if(a.type==='gradient'){
-      const [t,,,d] = gradientProject(a, x, y);
+      let gt, qx, qy;
+      [gt,qx,qy,d] = gradientProject(a, x, y);
       if(d >= a.r) continue;
-      let e = d <= inner ? 1 : 1 - (d - inner)/span;
+      let e = 1 - d/a.r;
       e = Math.pow(e, a.curve); e = smooth(e);
-      v = a.strength * t * e;
+      v = a.strength * gt * e;
+      t = e;                          // pull magnitude follows the radial falloff
+      nx = qx; ny = qy;
     } else if(a.type==='ellipse'){
       const flat = a._flat || (a._flat = flattenEllipse(a));
-      const d = nearestOnPoly(x, y, flat, true)[0];
+      d = nearestOnPoly(x, y, flat, true)[0];
       if(d >= a.r) continue;
-      let t = d <= inner ? 1 : 1 - (d - inner)/span;
+      t = 1 - d/a.r;
       t = Math.pow(t, a.curve); t = smooth(t);
       v = a.strength * t;
+      // Pull toward the ellipse center for an intuitive magnet feel
+      nx = a.x; ny = a.y;
     } else {
-      let d;
+      let qx, qy;
       if(a.type==='pen'){
         const flat = a._flat || (a._flat = flattenBezier(a.nodes, a.closed));
         if(flat.length<2) continue;
-        d = nearestOnPoly(x,y, flat, a.closed)[0];
-      } else d = Math.hypot(x-a.x, y-a.y);
+        const hit = nearestOnPoly(x,y, flat, a.closed);
+        d = hit[0]; qx = hit[1]; qy = hit[2];
+      } else { d = Math.hypot(x-a.x, y-a.y); qx = a.x; qy = a.y; }
       if(d >= a.r) continue;
-      let t = d <= inner ? 1 : 1 - (d - inner)/span;
+      t = 1 - d/a.r;
       t = Math.pow(t, a.curve); t = smooth(t);
       v = a.strength * t;
+      nx = qx; ny = qy;
     }
     out[a.mode] += v;
+    // Magnetic pull: cell shifts toward (positive) or away from (negative)
+    // the nearest attractor point. Cells closer to the attractor get pulled
+    // a larger fraction of their distance — they cluster into the center.
+    const pull = a.pull || 0;
+    if(pull && t > 0){
+      out.px += (nx - x) * pull * t;
+      out.py += (ny - y) * pull * t;
+    }
   }
-  for(const k in out) out[k] = clamp(out[k], -1, 1);
+  out.scale = clamp(out.scale, -1, 1);
+  out.hole  = clamp(out.hole,  -1, 1);
   return out;
 }
 
@@ -594,7 +608,7 @@ function drawGrid(){
 
       ctx.fillStyle = fillColor;
       ctx.strokeStyle = fillColor;
-      cellShape(ctx, cx+jx, cy+jy, sz, 0, cornerPx, S.shape);
+      cellShape(ctx, cx+jx+f.px, cy+jy+f.py, sz, 0, cornerPx, S.shape);
     }
   }
 }
@@ -878,11 +892,6 @@ bindRange('aFalloff','aFalloff', v=>v.toFixed(0), v=>{
   const a = S.attractors[S.selected]; if(!a) return;
   const prev = a.r || v;
   a.r = v;
-  if(a.inner != null && a.inner > v){
-    a.inner = v;
-    S.aInner = v;
-    $('aInner').value = v; $('aInnerV').value = Math.round(v);
-  }
   if(a.type==='ellipse'){
     const k = v / (prev || 1);
     a.rx = Math.max(1, a.rx * k);
@@ -890,13 +899,8 @@ bindRange('aFalloff','aFalloff', v=>v.toFixed(0), v=>{
     invalidateFlat(a);
   }
 });
-bindRange('aInner','aInner', v=>v.toFixed(0), v=>{
-  const a = S.attractors[S.selected]; if(!a) return;
-  a.inner = clamp(v, 0, a.r);
-  if(a.inner !== v){
-    S.aInner = a.inner;
-    $('aInner').value = a.inner; $('aInnerV').value = Math.round(a.inner);
-  }
+bindRange('aPull','aPull', v=>v.toFixed(2), v=>{
+  if(S.selected>=0 && S.attractors[S.selected]) S.attractors[S.selected].pull = v;
 });
 bindRange('aCurve','aCurve', v=>v.toFixed(2), v=>{
   if(S.selected>=0 && S.attractors[S.selected]) S.attractors[S.selected].curve = v;
@@ -1223,12 +1227,12 @@ function selectAttractor(i){
   if(i>=0){
     const a = S.attractors[i];
     S.aFalloff  = a.r;
-    S.aInner    = a.inner || 0;
+    S.aPull     = a.pull || 0;
     S.aStrength = a.strength;
     S.aCurve    = a.curve;
     S.aMode     = a.mode;
     $('aFalloff').value  = a.r;        $('aFalloffV').value  = Math.round(a.r);
-    $('aInner').value    = S.aInner;   $('aInnerV').value    = Math.round(S.aInner);
+    $('aPull').value     = S.aPull;    $('aPullV').value     = S.aPull.toFixed(2);
     $('aStrength').value = a.strength; $('aStrengthV').value = a.strength.toFixed(2);
     $('aCurve').value    = a.curve;    $('aCurveV').value    = a.curve.toFixed(2);
     document.querySelectorAll('#amode button').forEach(b =>
@@ -1245,7 +1249,7 @@ function commitDraft(closed){
   if(!S.draft || S.draft.nodes.length<2){ S.draft = null; draw(); return; }
   pushHistory();
   S.attractors.push({
-    type:'pen', nodes:S.draft.nodes, r:S.aFalloff, inner:S.aInner||0, closed:!!closed,
+    type:'pen', nodes:S.draft.nodes, r:S.aFalloff, pull:S.aPull||0, closed:!!closed,
     mode:S.aMode, strength:S.aStrength, curve:S.aCurve
   });
   S.draft = null;
@@ -1532,7 +1536,7 @@ cnv.addEventListener('mousedown', e => {
       selectAttractor(hit.i);
       drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
     } else {
-      S.attractors.push({ type:'gradient', a:[wx,wy], b:[wx,wy], r:S.aFalloff, inner:S.aInner||0,
+      S.attractors.push({ type:'gradient', a:[wx,wy], b:[wx,wy], r:S.aFalloff, pull:S.aPull||0,
         mode:S.aMode, strength:S.aStrength, curve:S.aCurve });
       const i = S.attractors.length-1;
       selectAttractor(i);
@@ -1551,7 +1555,7 @@ cnv.addEventListener('mousedown', e => {
     } else {
       S.attractors.push({
         type:'ellipse', x:wx, y:wy, rx:1, ry:1, rot:0,
-        r:S.aFalloff, inner:S.aInner||0, mode:S.aMode, strength:S.aStrength, curve:S.aCurve
+        r:S.aFalloff, pull:S.aPull||0, mode:S.aMode, strength:S.aStrength, curve:S.aCurve
       });
       const i = S.attractors.length-1;
       selectAttractor(i);
@@ -1568,7 +1572,7 @@ cnv.addEventListener('mousedown', e => {
     selectAttractor(hit.i);
     drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
   } else {
-    S.attractors.push({ type:'point', x:wx, y:wy, r:S.aFalloff, inner:S.aInner||0,
+    S.attractors.push({ type:'point', x:wx, y:wy, r:S.aFalloff, pull:S.aPull||0,
       mode:S.aMode, strength:S.aStrength, curve:S.aCurve });
     selectAttractor(S.attractors.length-1);
     drag = { i:S.attractors.length-1, vertex:-1, lastX:wx, lastY:wy };
@@ -1605,8 +1609,8 @@ addEventListener('mousemove', e => {
     return;
   }
 
-  // Cursor feedback when Pen tool is active (not drafting, no drag)
-  if(S.tool==='pen' && !drag){ updatePenCursor(); }
+  // Cursor feedback (hover): pointer over attractors, pen-specific otherwise
+  if(!drag){ updateHoverCursor(); }
 
   if(drag==null) return;
   const a = S.attractors[drag.i];
@@ -1705,6 +1709,14 @@ function updatePenCursor(){
   cnv.style.cursor = hit ? 'copy' : 'crosshair';
 }
 
+function updateHoverCursor(){
+  if(panning || drag) return;            // active interaction owns the cursor
+  if(S.spaceDown){ cnv.style.cursor = 'grab'; return; }
+  if(S.tool === 'pen'){ updatePenCursor(); return; }
+  const hit = pickAttractor(S.mouseW[0], S.mouseW[1], 12);
+  cnv.style.cursor = hit ? 'pointer' : 'crosshair';
+}
+
 addEventListener('mouseup', () => {
   drag = null; panning = false;
   if(S.draft) S.draft.dragNode = -1;
@@ -1725,14 +1737,10 @@ cnv.addEventListener('wheel', e => {
     const f = Math.exp(-e.deltaY * 0.0015);
     const tgt = S.attractors[hit.i];
     tgt.r = clamp(tgt.r * f, 5, 5000);
-    if(tgt.inner != null && tgt.inner > tgt.r) tgt.inner = tgt.r;
     if(S.selected===hit.i){
       $('aFalloff').value = tgt.r;
       $('aFalloffV').value = Math.round(tgt.r);
       S.aFalloff = tgt.r;
-      $('aInner').value = tgt.inner || 0;
-      $('aInnerV').value = Math.round(tgt.inner || 0);
-      S.aInner = tgt.inner || 0;
     }
     draw();
     return;
@@ -1748,6 +1756,10 @@ cnv.addEventListener('wheel', e => {
 }, {passive:false});
 
 addEventListener('keydown', e => {
+  // Ignore key handling while typing in an input/textarea (e.g. attractor name field)
+  const t = e.target;
+  const inField = t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable);
+
   const mod = e.ctrlKey || e.metaKey;
   if(mod && (e.key==='z' || e.key==='Z')){
     e.preventDefault();
@@ -1761,6 +1773,17 @@ addEventListener('keydown', e => {
       pushHistory(); duplicateAttractor(S.selected);
     }
     return;
+  }
+  if(!inField && (e.key==='Delete' || e.key==='Backspace')){
+    if(S.selected>=0 && S.attractors[S.selected]){
+      e.preventDefault();
+      pushHistory();
+      S.attractors.splice(S.selected,1);
+      selectAttractor(-1);
+      renderAList();
+      draw();
+      return;
+    }
   }
   if(e.code==='Space' && !e.repeat){ S.spaceDown = true; cnv.style.cursor='grab'; }
   if(e.code==='Enter' && S.tool==='pen' && S.draft){ commitDraft(false); }
@@ -1841,7 +1864,7 @@ function renderSVGGrid(out){
 
       const jx = (rng()*2-1)*S.jitter*s*0.3;
       const jy = (rng()*2-1)*S.jitter*s*0.3;
-      const [Sx,Sy] = toScreen(cx+jx, cy+jy);
+      const [Sx,Sy] = toScreen(cx+jx+f.px, cy+jy+f.py);
       const SS = sz * S.zoom;
       const half = SS/2;
       const fillA = S.fill ? fillColor : 'none';

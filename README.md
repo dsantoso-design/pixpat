@@ -7,22 +7,23 @@ No build step. Open the `index.html` file in any modern browser.
 ## Versions
 
 - **[v1/](v1/index.html)** — initial release. Per-attractor radius, curve, strength, mode (scale / hole).
-- **[v1.5/](v1.5/index.html)** — adds a per-attractor **Inner radius** control: a plateau zone close to the attractor where the effect stays at full strength before falloff begins. Set `Inner = 0` to behave exactly like v1; raise it to create a "ring" or "donut" influence.
+- **[v1.5/](v1.5/index.html)** — adds a per-attractor **Pull** control (magnetic displacement): cells inside the attractor's radius get visually shifted toward (or away from) the attractor center. Closer cells get pulled harder, producing a clustering / magnet effect. Also: hover cursor changes to a pointer over attractors, and Delete / Backspace removes the selected attractor.
 
 ## Attractor controls (v1.5)
 
 | Control  | Purpose |
 |----------|---------|
-| Strength | Effect amplitude (-1 to 1; sign flips push/pull) |
+| Strength | Effect amplitude (-1 to 1; sign flips push/pull on the chosen Mode) |
 | Radius   | Outer extent — beyond this, no effect |
-| Inner    | Inner plateau — within this distance, effect stays at full strength |
+| Pull     | Magnetic displacement (-1 to 1). Positive = cells migrate toward the attractor; negative = cells get pushed away. 0 = no displacement. |
 | Curve    | Falloff exponent (sharper vs. softer edge) |
 | Mode     | `scale` (resize cells) or `hole` (fade out cells) |
 
 ## Usage
 
 - **Click** the canvas to add an attractor of the current Tool.
-- **Drag** to move; **alt+drag** to duplicate; **right-click** to delete.
+- **Drag** to move; **alt+drag** to duplicate; **right-click** or **Delete / Backspace** to remove.
 - **Shift+wheel** over an attractor to resize its radius.
 - **Wheel** zooms; **space+drag** pans.
 - **Ctrl+Z** / **Ctrl+Shift+Z** undo/redo.
+- Hover an attractor (Point / Ellipse / Gradient tools) and the cursor turns into a pointer to indicate it is selectable.
