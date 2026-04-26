@@ -1,0 +1,1946 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pixpat v1.5 — pixel pattern designer</title>
+<style>
+  :root{
+    --bg:#0d0e10; --panel:#16181c; --panel2:#1c1f25; --line:#2a2e36;
+    --text:#e7e9ee; --muted:#8a909c; --accent:#7cf2c1; --warn:#ff7a59;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font:13px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+  #app{display:grid;grid-template-columns:280px 1fr 280px;height:100%}
+  aside{background:var(--panel);border-right:1px solid var(--line);
+    overflow:auto;padding:14px}
+  aside.right{border-right:none;border-left:1px solid var(--line)}
+  .aList{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+  .aItem{display:flex;align-items:center;gap:6px;padding:5px 8px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+    font-size:11px;cursor:pointer}
+  .aItem:hover{border-color:#3a4150}
+  .aItem.on{border-color:var(--accent);background:#1a2a25;color:var(--accent)}
+  .aItem .name{flex:1;min-width:0;background:transparent;border:1px solid transparent;
+    color:inherit;font:inherit;font-size:11px;padding:2px 4px;border-radius:3px;
+    text-overflow:ellipsis}
+  .aItem .name:hover{border-color:var(--line)}
+  .aItem .name:focus{outline:none;background:var(--panel);border-color:var(--accent);color:var(--text)}
+  .aItem .mode{color:var(--muted);font-size:10px;flex:0 0 auto;white-space:nowrap}
+  .aItem.on .mode{color:var(--accent)}
+  .aItem .btn{width:18px;height:18px;display:flex;align-items:center;justify-content:center;
+    background:transparent;border:1px solid transparent;color:var(--muted);
+    border-radius:4px;padding:0;margin:0;line-height:1;font-size:12px;flex:0 0 auto}
+  .aItem .dup:hover{color:var(--accent);border-color:var(--accent)}
+  .aItem .x:hover{color:var(--warn);border-color:var(--warn)}
+  .aItem .mute{color:var(--accent)}
+  .aItem .mute.off{color:var(--muted)}
+  .aItem .mute:hover{border-color:var(--accent)}
+  .aItem.muted .name{color:var(--muted);text-decoration:line-through}
+  .empty{color:var(--muted);font-size:11px;padding:8px 0;font-style:italic}
+  aside h1{font-size:13px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 4px;font-weight:600}
+  aside h1 b{color:var(--accent);font-weight:700;letter-spacing:.06em}
+  aside .tag{color:var(--muted);font-size:11px;margin:0 0 10px}
+  aside h2{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);margin:18px 0 8px;font-weight:600}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}
+  .row label{color:var(--muted);font-size:12px;flex:1}
+  .row .v{color:var(--text);font-variant-numeric:tabular-nums;
+    font-size:11px;min-width:44px;text-align:right}
+  .row input.v{width:52px;min-width:52px;flex:0 0 52px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:4px;
+    padding:2px 5px;font:inherit;font-size:11px;color:var(--text);
+    font-variant-numeric:tabular-nums;text-align:right;
+    appearance:textfield;-moz-appearance:textfield}
+  .row input.v:focus{outline:none;border-color:var(--accent)}
+  .row input.v::-webkit-outer-spin-button,
+  .row input.v::-webkit-inner-spin-button{-webkit-appearance:none;appearance:none;margin:0}
+  input[type=range]{flex:1.4;accent-color:var(--accent);background:transparent}
+  select,button{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:6px;padding:6px 8px;font:inherit;cursor:pointer}
+  select{width:100%}
+  button{width:100%;margin-top:6px}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.danger:hover{border-color:var(--warn);color:var(--warn)}
+  .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:4px}
+  .seg.two{grid-template-columns:repeat(2,1fr)}
+  .seg.five{grid-template-columns:repeat(5,1fr)}
+  .seg button{margin:0;padding:5px 4px;font-size:11px}
+  .seg button.on{border-color:var(--accent);color:var(--accent);background:#1a2a25}
+  main{position:relative;overflow:hidden;background:#08090b}
+  canvas{display:block;width:100%;height:100%;cursor:crosshair}
+  #hud{position:absolute;left:12px;bottom:10px;color:var(--muted);
+    font-size:11px;pointer-events:none;letter-spacing:.04em;max-width:72%;
+    background:rgba(15,18,22,.82);padding:6px 10px;border-radius:6px;
+    border:1px solid var(--line);backdrop-filter:blur(4px)}
+  #hud b{color:var(--text);font-weight:500}
+  #zoomTag{position:absolute;right:12px;bottom:10px;color:var(--muted);
+    font-size:11px;font-variant-numeric:tabular-nums;pointer-events:none;
+    background:rgba(15,18,22,.82);padding:6px 10px;border-radius:6px;
+    border:1px solid var(--line);backdrop-filter:blur(4px)}
+  #toolTag,#gradTag{position:absolute;left:12px;top:10px;color:var(--accent);
+    font-size:11px;letter-spacing:.06em;pointer-events:none;
+    background:rgba(15,18,22,.7);padding:3px 8px;border-radius:4px;
+    border:1px solid var(--line);display:none}
+  #toolTag.on,#gradTag.on{display:block}
+  .swatch{display:flex;gap:6px;margin-top:4px;align-items:stretch}
+  .swatch input[type=color]{flex:1;height:30px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:6px;padding:2px;cursor:pointer}
+  .swatch button.swap{flex:0 0 30px;width:30px;margin:0;padding:0;font-size:14px;
+    display:flex;align-items:center;justify-content:center}
+  .chk{display:flex;align-items:center;gap:6px;color:var(--muted)}
+  .chk input{accent-color:var(--accent)}
+  .pill{display:inline-block;padding:1px 6px;border:1px solid var(--line);
+    border-radius:10px;color:var(--muted);font-size:10px;margin-left:6px}
+  .pill.on{color:var(--accent);border-color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <h1>pix<b>pat</b></h1>
+    <div class="tag">pixel pattern designer · png / svg</div>
+
+    <h2>Shape</h2>
+    <select id="shape">
+      <option value="square">Square</option>
+      <option value="circle">Circle</option>
+      <option value="diamond">Diamond</option>
+      <option value="cross">Cross / plus</option>
+      <option value="dot" selected>Centered dot</option>
+      <option value="star">Star</option>
+      <option value="custom">Custom…</option>
+    </select>
+
+    <!-- Star params -->
+    <div id="starBox" style="display:none">
+      <div class="row" style="margin-top:6px"><label>Points</label>
+        <input id="starN" type="range" min="3" max="12" value="5" step="1">
+        <input class="v" id="starNV" type="number" min="3" max="12" step="1"></div>
+      <div class="row"><label>Inner</label>
+        <input id="starInner" type="range" min="0.1" max="0.9" value="0.45" step="0.01">
+        <input class="v" id="starInnerV" type="number" min="0.1" max="0.9" step="0.01"></div>
+    </div>
+
+    <!-- Custom shape editor -->
+    <div id="customBox" style="display:none;margin-top:6px">
+      <div class="seg five" id="customPreset" style="grid-template-columns:repeat(5,1fr)">
+        <button data-p="tri">▲</button>
+        <button data-p="arrow">➤</button>
+        <button data-p="heart">♥</button>
+        <button data-p="hex">⬣</button>
+        <button data-p="houndstooth" title="Houndstooth">▦</button>
+      </div>
+      <canvas id="shapeEd" width="240" height="240"
+        style="width:100%;aspect-ratio:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-top:6px;display:block;cursor:crosshair"></canvas>
+      <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.35">
+        Click to add a vertex · drag to move · dbl-click to remove · <b id="vCount" style="color:var(--text)">0</b> vertices
+      </div>
+      <div class="seg two">
+        <button id="shapeClear" class="danger">Clear</button>
+        <button id="shapeClose">Toggle closed</button>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:6px"><label>Tile offset</label></div>
+    <select id="tileType">
+      <option value="regular" selected>Regular grid</option>
+      <option value="brick-row">Brick by row</option>
+      <option value="brick-col">Brick by column</option>
+    </select>
+
+    <h2>Geometry</h2>
+    <div class="row"><label>Scale</label>
+      <input id="scale" type="range" min="0.1" max="1" value="0.23" step="0.01">
+      <input class="v" id="scaleV" type="number" min="0.1" max="1" step="0.01"></div>
+    <div class="row"><label>Zoom</label>
+      <input id="size" type="range" min="4" max="120" value="42" step="1">
+      <input class="v" id="sizeV" type="number" min="4" max="120" step="1"></div>
+    <div class="row" id="cornerRow"><label>Round corner</label>
+      <input id="corner" type="range" min="0" max="50" value="50" step="1">
+      <input class="v" id="cornerV" type="number" min="0" max="50" step="1"></div>
+    <div class="row"><label>Jitter</label>
+      <input id="jitter" type="range" min="0" max="5" value="0" step="0.01">
+      <input class="v" id="jitterV" type="number" min="0" max="5" step="0.01"></div>
+    <div class="row"><label>Stroke</label>
+      <input id="stroke" type="range" min="0" max="6" value="0" step="0.1">
+      <input class="v" id="strokeV" type="number" min="0" max="6" step="0.1"></div>
+
+    <h2>Color</h2>
+    <div class="swatch">
+      <input id="bg" type="color" value="#f1e4c9">
+      <button id="swap" class="swap" title="Swap colors">⇄</button>
+      <input id="fg" type="color" value="#0d0e10">
+    </div>
+    <label class="chk" style="margin-top:8px"><input id="fill" type="checkbox" checked> fill cells</label>
+
+    <h2>View</h2>
+    <label class="chk" style="margin-bottom:6px"><input id="mute" type="checkbox"> mute attractors</label>
+    <label class="chk" style="margin-bottom:6px"><input id="hideA" type="checkbox"> hide attractors (keep effect)</label>
+    <button id="resetView">Reset zoom &amp; pan</button>
+
+    <h2>Export</h2>
+    <div class="seg two">
+      <button id="png">PNG</button>
+      <button id="svg">SVG</button>
+    </div>
+  </aside>
+
+  <main>
+    <canvas id="c"></canvas>
+    <div id="toolTag">PEN — click: corner point · click+drag: smooth point · near existing path: add vertex · Enter/dbl-click finish · click first vertex to close</div>
+    <div id="gradTag">GRADIENT — drag A→B · A end = 0, B end = full strength</div>
+    <div id="hud">click <b>add/select</b> · drag <b>move</b> · alt+drag <b>duplicate</b> · right-click <b>delete</b> · wheel <b>zoom</b> · shift+wheel <b>radius</b> · space+drag <b>pan</b> · ctrl+z <b>undo</b> · ctrl+d <b>dup</b></div>
+    <div id="zoomTag">100%</div>
+  </main>
+
+  <aside class="right">
+    <h1>Attractors</h1>
+    <div class="tag">each attractor has independent settings</div>
+
+    <h2>Tool <span id="selPill" class="pill">none selected</span></h2>
+    <div class="seg" id="atool" style="grid-template-columns:repeat(4,1fr)">
+      <button data-t="point" class="on">Point</button>
+      <button data-t="ellipse">Ellipse</button>
+      <button data-t="pen">Pen</button>
+      <button data-t="gradient">Grad</button>
+    </div>
+
+    <h2>Mode</h2>
+    <div class="seg two" id="amode">
+      <button data-m="scale" class="on">scale</button>
+      <button data-m="hole">hole</button>
+    </div>
+
+    <h2>Values</h2>
+    <div class="row"><label>Strength</label>
+      <input id="aStrength" type="range" min="-1" max="1" value="-1" step="0.01">
+      <input class="v" id="aStrengthV" type="number" min="-1" max="1" step="0.01"></div>
+    <div class="row"><label>Radius</label>
+      <input id="aFalloff" type="range" min="20" max="1200" value="420" step="2">
+      <input class="v" id="aFalloffV" type="number" min="20" max="1200" step="2"></div>
+    <div class="row"><label>Inner</label>
+      <input id="aInner" type="range" min="0" max="1200" value="0" step="2">
+      <input class="v" id="aInnerV" type="number" min="0" max="1200" step="2"></div>
+    <div class="row"><label>Curve</label>
+      <input id="aCurve" type="range" min="0.3" max="4" value="1.7" step="0.05">
+      <input class="v" id="aCurveV" type="number" min="0.3" max="4" step="0.05"></div>
+
+    <h2>List</h2>
+    <div id="aList" class="aList"></div>
+
+    <div style="margin-top:10px">
+      <button id="closePath">Close pen path</button>
+      <button id="clearA" class="danger">Clear all attractors</button>
+    </div>
+  </aside>
+</div>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+const TAU = Math.PI*2;
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;
+  return((t^t>>>14)>>>0)/4294967296}}
+const smooth = t => t*t*(3-2*t);
+const clamp  = (v,a,b) => v<a?a:v>b?b:v;
+const lerp   = (a,b,t) => a+(b-a)*t;
+
+function hexToRgb(h){
+  h=h.replace('#','');
+  if(h.length===3) h=h.split('').map(c=>c+c).join('');
+  const n=parseInt(h,16);
+  return [(n>>16)&255,(n>>8)&255,n&255];
+}
+function rgbToHex(r,g,b){
+  const h=v=>Math.round(clamp(v,0,255)).toString(16).padStart(2,'0');
+  return '#'+h(r)+h(g)+h(b);
+}
+function mixHex(a,b,t){
+  const A=hexToRgb(a), B=hexToRgb(b);
+  return rgbToHex(lerp(A[0],B[0],t), lerp(A[1],B[1],t), lerp(A[2],B[2],t));
+}
+
+const S = {
+  shape:'dot', tileType:'regular',
+  starN:5, starInner:0.45,
+  customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true,
+  size:42, scale:0.23, corner:50, jitter:0, stroke:0,
+  attractors:[], selected:-1,
+  tool:'point', draft:null, mouseW:[0,0],
+  aMode:'scale', aStrength:-1, aFalloff:420, aInner:0, aCurve:1.7,
+  bg:'#f1e4c9', fg:'#0d0e10', fill:true,
+  muteAttractors:false, hideAttractors:false,
+  zoom:1, panX:0, panY:0,
+  w:0, h:0, dpr:Math.min(2, devicePixelRatio||1),
+  spaceDown:false,
+  history:[], redo:[], lastWheelPushAt:0,
+};
+
+const SNAP_KEYS = ['shape','tileType','starN','starInner','customPts','customClosed',
+  'size','scale','corner','jitter','stroke',
+  'bg','fg','fill','attractors','selected'];
+const UI_CONTROLS = {
+  shape:'shape', tileType:'tileType',
+  starN:'starN', starInner:'starInner',
+  size:'size', scale:'scale', corner:'corner', jitter:'jitter', stroke:'stroke',
+  bg:'bg', fg:'fg', fill:'fill',
+};
+
+// ---------- undo / redo ----------
+function snapshot(){
+  const o = {};
+  for(const k of SNAP_KEYS) o[k] = S[k];
+  return JSON.stringify(o);
+}
+function pushHistory(snap){
+  const s = snap || snapshot();
+  if(S.history.length && S.history[S.history.length-1]===s) return;
+  S.history.push(s);
+  if(S.history.length>200) S.history.shift();
+  S.redo.length = 0;
+}
+function applySnapshot(json){
+  const o = JSON.parse(json);
+  for(const k of SNAP_KEYS) if(k in o) S[k] = o[k];
+  // sync UI controls to new state
+  for(const key in UI_CONTROLS){
+    const el = $(UI_CONTROLS[key]); if(!el) continue;
+    if(el.type === 'checkbox') el.checked = !!S[key];
+    else el.value = S[key];
+    const vEl = $(UI_CONTROLS[key]+'V');
+    if(vEl) vEl.value = (typeof S[key]==='number') ? S[key] : S[key];
+  }
+  if(typeof S.selected === 'number') selectAttractor(S.selected);
+  renderAList();
+  if(typeof syncShapeUI === 'function') syncShapeUI();
+  draw();
+}
+function undo(){ if(!S.history.length) return; S.redo.push(snapshot()); applySnapshot(S.history.pop()); }
+function redoFn(){ if(!S.redo.length) return; S.history.push(snapshot()); applySnapshot(S.redo.pop()); }
+
+const cnv = $('c'); const ctx = cnv.getContext('2d');
+
+let _centered = false;
+function resize(){
+  const r = cnv.getBoundingClientRect();
+  S.w = r.width; S.h = r.height;
+  cnv.width  = Math.round(r.width  * S.dpr);
+  cnv.height = Math.round(r.height * S.dpr);
+  ctx.setTransform(S.dpr,0,0,S.dpr,0,0);
+  if(!_centered){ S.panX = S.w/2; S.panY = S.h/2; _centered = true; }
+  draw();
+}
+addEventListener('resize', resize);
+
+function screenToWorld(sx,sy){ return [(sx - S.panX)/S.zoom, (sy - S.panY)/S.zoom]; }
+function viewBounds(){
+  return { x0:(0 - S.panX)/S.zoom, y0:(0 - S.panY)/S.zoom,
+           x1:(S.w - S.panX)/S.zoom, y1:(S.h - S.panY)/S.zoom };
+}
+
+// ---------- distance helpers ----------
+function distToSeg(px,py, ax,ay, bx,by){
+  const dx=bx-ax, dy=by-ay;
+  const l2 = dx*dx+dy*dy;
+  if(l2===0) return [Math.hypot(px-ax,py-ay), ax, ay];
+  let t = ((px-ax)*dx + (py-ay)*dy)/l2;
+  t = clamp(t,0,1);
+  const cx = ax+t*dx, cy = ay+t*dy;
+  return [Math.hypot(px-cx, py-cy), cx, cy];
+}
+function nearestOnPoly(px,py, pts, closed){
+  let bd=Infinity, bx=pts[0][0], by=pts[0][1];
+  const n = pts.length;
+  const segs = closed ? n : n-1;
+  for(let i=0;i<segs;i++){
+    const a=pts[i], b=pts[(i+1)%n];
+    const [d,cx,cy] = distToSeg(px,py, a[0],a[1], b[0],b[1]);
+    if(d<bd){ bd=d; bx=cx; by=cy; }
+  }
+  return [bd, bx, by];
+}
+
+// ---------- attractor field ----------
+function gradientProject(a, x, y){
+  const ax=a.a[0], ay=a.a[1], bx=a.b[0], by=a.b[1];
+  const dx=bx-ax, dy=by-ay;
+  const l2 = dx*dx+dy*dy;
+  if(l2===0) return [0, ax, ay, Math.hypot(x-ax,y-ay)];
+  let t = ((x-ax)*dx + (y-ay)*dy)/l2;
+  t = clamp(t,0,1);
+  const qx = ax+t*dx, qy = ay+t*dy;
+  return [t, qx, qy, Math.hypot(x-qx, y-qy)];
+}
+
+// Flatten a pen bezier path to a polyline for distance + field sampling
+function flattenBezier(nodes, closed, steps){
+  steps = steps || 18;
+  const out = [];
+  const n = nodes.length;
+  if(n<2) return out;
+  const segs = closed ? n : n-1;
+  for(let i=0;i<segs;i++){
+    const a = nodes[i], b = nodes[(i+1)%n];
+    const p0=a.p, p3=b.p;
+    const p1=[p0[0]+a.hOut[0], p0[1]+a.hOut[1]];
+    const p2=[p3[0]+b.hIn[0],  p3[1]+b.hIn[1]];
+    for(let k=(i===0?0:1); k<=steps; k++){
+      const t=k/steps, u=1-t, uu=u*u, tt=t*t;
+      const x = uu*u*p0[0] + 3*uu*t*p1[0] + 3*u*tt*p2[0] + tt*t*p3[0];
+      const y = uu*u*p0[1] + 3*uu*t*p1[1] + 3*u*tt*p2[1] + tt*t*p3[1];
+      out.push([x,y]);
+    }
+  }
+  return out;
+}
+
+function ellipseNormDist(a, x, y){
+  const dx=x-a.x, dy=y-a.y;
+  const c=Math.cos(-a.rot), s=Math.sin(-a.rot);
+  const u=(dx*c - dy*s)/a.rx;
+  const v=(dx*s + dy*c)/a.ry;
+  return Math.hypot(u, v); // 1.0 = on ellipse boundary
+}
+
+function flattenEllipse(a, steps){
+  steps = steps || 64;
+  const out = [];
+  const c=Math.cos(a.rot), s=Math.sin(a.rot);
+  for(let k=0;k<steps;k++){
+    const t = k/steps * TAU;
+    const x = Math.cos(t)*a.rx, y = Math.sin(t)*a.ry;
+    out.push([a.x + c*x - s*y, a.y + s*x + c*y]);
+  }
+  return out;
+}
+
+function fields(x,y){
+  const out = {scale:0, hole:0};
+  if(S.muteAttractors) return out;
+  for(const a of S.attractors){
+    if(a.muted) continue;
+    const inner = clamp(a.inner || 0, 0, Math.max(0, a.r - 0.001));
+    const span  = Math.max(0.001, a.r - inner);
+    let v;
+    if(a.type==='gradient'){
+      const [t,,,d] = gradientProject(a, x, y);
+      if(d >= a.r) continue;
+      let e = d <= inner ? 1 : 1 - (d - inner)/span;
+      e = Math.pow(e, a.curve); e = smooth(e);
+      v = a.strength * t * e;
+    } else if(a.type==='ellipse'){
+      const flat = a._flat || (a._flat = flattenEllipse(a));
+      const d = nearestOnPoly(x, y, flat, true)[0];
+      if(d >= a.r) continue;
+      let t = d <= inner ? 1 : 1 - (d - inner)/span;
+      t = Math.pow(t, a.curve); t = smooth(t);
+      v = a.strength * t;
+    } else {
+      let d;
+      if(a.type==='pen'){
+        const flat = a._flat || (a._flat = flattenBezier(a.nodes, a.closed));
+        if(flat.length<2) continue;
+        d = nearestOnPoly(x,y, flat, a.closed)[0];
+      } else d = Math.hypot(x-a.x, y-a.y);
+      if(d >= a.r) continue;
+      let t = d <= inner ? 1 : 1 - (d - inner)/span;
+      t = Math.pow(t, a.curve); t = smooth(t);
+      v = a.strength * t;
+    }
+    out[a.mode] += v;
+  }
+  for(const k in out) out[k] = clamp(out[k], -1, 1);
+  return out;
+}
+
+function invalidateFlat(a){ if(a && (a.type==='pen' || a.type==='ellipse')) delete a._flat; }
+function invalidateAllFlat(){ for(const a of S.attractors) invalidateFlat(a); }
+
+// Axis-aligned world bounding box for pen / ellipse attractors.
+function attractorBBox(a){
+  if(a.type==='pen'){
+    if(!a.nodes.length) return null;
+    let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+    for(const nd of a.nodes){
+      if(nd.p[0]<x0) x0=nd.p[0]; if(nd.p[1]<y0) y0=nd.p[1];
+      if(nd.p[0]>x1) x1=nd.p[0]; if(nd.p[1]>y1) y1=nd.p[1];
+    }
+    return {x0,y0,x1,y1};
+  }
+  if(a.type==='ellipse'){
+    // bbox of rotated ellipse: hw = sqrt(rx² cos²θ + ry² sin²θ), similarly for hh
+    const c=Math.cos(a.rot), s=Math.sin(a.rot);
+    const hw = Math.sqrt(a.rx*a.rx*c*c + a.ry*a.ry*s*s);
+    const hh = Math.sqrt(a.rx*a.rx*s*s + a.ry*a.ry*c*c);
+    return {x0:a.x-hw, y0:a.y-hh, x1:a.x+hw, y1:a.y+hh};
+  }
+  return null;
+}
+
+function bboxCorners(bb){
+  // 0:TL 1:TR 2:BR 3:BL
+  return [[bb.x0,bb.y0],[bb.x1,bb.y0],[bb.x1,bb.y1],[bb.x0,bb.y1]];
+}
+
+// ---------- pixel grid draw ----------
+function cellShape(ctx, cx, cy, s, rot, corner, shape){
+  ctx.save();
+  ctx.translate(cx, cy);
+  if(rot) ctx.rotate(rot);
+  const half = s/2;
+  ctx.beginPath();
+  switch(shape){
+    case 'circle':
+      ctx.arc(0,0, half, 0, TAU);
+      break;
+    case 'diamond':
+      ctx.moveTo(0,-half); ctx.lineTo(half,0); ctx.lineTo(0,half); ctx.lineTo(-half,0);
+      ctx.closePath();
+      break;
+    case 'cross': {
+      const t = s * (0.32);
+      const h = half, ht = t/2;
+      ctx.moveTo(-ht,-h); ctx.lineTo(ht,-h); ctx.lineTo(ht,-ht);
+      ctx.lineTo(h,-ht);  ctx.lineTo(h,ht);  ctx.lineTo(ht,ht);
+      ctx.lineTo(ht,h);   ctx.lineTo(-ht,h); ctx.lineTo(-ht,ht);
+      ctx.lineTo(-h,ht);  ctx.lineTo(-h,-ht);ctx.lineTo(-ht,-ht);
+      ctx.closePath();
+      break;
+    }
+    case 'dot':
+      ctx.arc(0,0, half*0.45, 0, TAU);
+      break;
+    case 'star': {
+      const N = S.starN, inner = S.starInner * half;
+      for(let k=0;k<N*2;k++){
+        const a = -Math.PI/2 + k*Math.PI/N;
+        const rr = (k&1) ? inner : half;
+        const x = Math.cos(a)*rr, y = Math.sin(a)*rr;
+        if(k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.closePath();
+      break;
+    }
+    case 'custom': {
+      const pts = S.customPts;
+      if(pts.length<2){ ctx.restore(); return; }
+      for(let k=0;k<pts.length;k++){
+        const x = pts[k][0]*s, y = pts[k][1]*s;
+        if(k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      if(S.customClosed) ctx.closePath();
+      break;
+    }
+    case 'square':
+    default: {
+      const r = clamp(corner,0,half);
+      const x = -half, y = -half, w = s, h = s;
+      if(r<=0.1){ ctx.rect(x,y,w,h); }
+      else {
+        ctx.moveTo(x+r, y);
+        ctx.arcTo(x+w, y, x+w, y+h, r);
+        ctx.arcTo(x+w, y+h, x, y+h, r);
+        ctx.arcTo(x, y+h, x, y, r);
+        ctx.arcTo(x, y, x+w, y, r);
+        ctx.closePath();
+      }
+      break;
+    }
+  }
+  if(S.fill) ctx.fill();
+  if(S.stroke>0) ctx.stroke();
+  ctx.restore();
+}
+
+function drawGrid(){
+  const s = S.size;            // world px per cell
+  const vb = viewBounds();
+  const i0 = Math.floor(vb.x0/s)-1, i1 = Math.ceil(vb.x1/s)+1;
+  const j0 = Math.floor(vb.y0/s)-1, j1 = Math.ceil(vb.y1/s)+1;
+  const sp = S.scale;
+  const baseCorner = (S.corner/100); // 0..0.5 of half
+
+  for(let j=j0;j<j1;j++){
+    for(let i=i0;i<i1;i++){
+      let cx = i*s + s/2, cy = j*s + s/2;
+      if(S.tileType==='brick-row' && (j&1)) cx += s/2;
+      if(S.tileType==='brick-col' && (i&1)) cy += s/2;
+
+      const rng = mulberry32(((i*374761393)^(j*668265263)) >>> 0);
+      const f = fields(cx,cy);
+
+      const scale  = clamp(1 + f.scale, 0, 2);
+      const corner = baseCorner;
+      let fillColor = S.fg;
+      let hide = false;
+      if(f.hole < -0.02) hide = true;
+      else if(f.hole !== 0){
+        const t = clamp((f.hole+1)/2, 0, 1);
+        fillColor = mixHex(fillColor, S.bg, 1 - t);
+      }
+
+      if(hide) continue;
+      const sz = s * Math.max(0.02, scale) * sp;
+      if(sz <= 0.5) continue;
+      const cornerPx = corner * sz;
+
+      const jx = (rng()*2-1)*S.jitter*s*0.3;
+      const jy = (rng()*2-1)*S.jitter*s*0.3;
+
+      ctx.fillStyle = fillColor;
+      ctx.strokeStyle = fillColor;
+      cellShape(ctx, cx+jx, cy+jy, sz, 0, cornerPx, S.shape);
+    }
+  }
+}
+
+// ---------- draw ----------
+function draw(){
+  ctx.setTransform(S.dpr,0,0,S.dpr,0,0);
+  ctx.fillStyle = S.bg;
+  ctx.fillRect(0,0,S.w,S.h);
+
+  ctx.setTransform(S.dpr,0,0,S.dpr,0,0);
+  ctx.translate(S.panX, S.panY);
+  ctx.scale(S.zoom, S.zoom);
+  ctx.lineWidth = S.stroke / S.zoom;
+  drawGrid();
+
+  if(!S.hideAttractors){
+    drawAttractors();
+    drawDraft();
+    drawFreeTransform();
+  }
+
+  ctx.setTransform(S.dpr,0,0,S.dpr,0,0);
+  $('zoomTag').textContent = Math.round(S.zoom*100)+'%';
+}
+
+function drawFreeTransform(){
+  if(S.selected<0) return;
+  const a = S.attractors[S.selected];
+  if(!a || (a.type!=='pen' && a.type!=='ellipse')) return;
+  const bb = attractorBBox(a);
+  if(!bb) return;
+  ctx.save();
+  ctx.strokeStyle = '#ff7a59';
+  ctx.globalAlpha = 0.65;
+  ctx.lineWidth = 1/S.zoom;
+  ctx.setLineDash([4/S.zoom, 3/S.zoom]);
+  ctx.strokeRect(bb.x0, bb.y0, bb.x1-bb.x0, bb.y1-bb.y0);
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#0d0e10';
+  ctx.strokeStyle = '#ff7a59';
+  ctx.lineWidth = 1.5/S.zoom;
+  const h = 5/S.zoom;
+  for(const [cx,cy] of bboxCorners(bb)){
+    ctx.fillRect(cx-h, cy-h, h*2, h*2);
+    ctx.strokeRect(cx-h, cy-h, h*2, h*2);
+  }
+  ctx.restore();
+}
+
+function drawAttractors(){
+  for(let i=0;i<S.attractors.length;i++){
+    const a = S.attractors[i];
+    const sel = i===S.selected;
+    const col = sel ? '#ff7a59' : '#7cf2c1';
+    ctx.save();
+    if(a.type==='pen'){
+      const nodes = a.nodes, n = nodes.length;
+      const segs = a.closed ? n : n-1;
+      const drawCurve = () => {
+        ctx.beginPath();
+        ctx.moveTo(nodes[0].p[0], nodes[0].p[1]);
+        for(let k=0;k<segs;k++){
+          const A = nodes[k], B = nodes[(k+1)%n];
+          ctx.bezierCurveTo(
+            A.p[0]+A.hOut[0], A.p[1]+A.hOut[1],
+            B.p[0]+B.hIn[0],  B.p[1]+B.hIn[1],
+            B.p[0], B.p[1]
+          );
+        }
+        if(a.closed) ctx.closePath();
+      };
+      if(n>=2){
+        // influence band
+        ctx.strokeStyle = col;
+        ctx.globalAlpha = 0.12;
+        ctx.lineWidth = 2*a.r;
+        ctx.lineCap='round'; ctx.lineJoin='round';
+        drawCurve(); ctx.stroke();
+        // path line
+        ctx.globalAlpha = sel ? 0.95 : 0.7;
+        ctx.lineWidth = 1.5/S.zoom;
+        drawCurve(); ctx.stroke();
+      }
+      // handles (only when selected)
+      if(sel){
+        ctx.globalAlpha = 0.65;
+        ctx.lineWidth = 1/S.zoom;
+        ctx.strokeStyle = col;
+        for(const nd of nodes){
+          [['hIn',nd.hIn],['hOut',nd.hOut]].forEach(([,h]) => {
+            if(h[0]===0 && h[1]===0) return;
+            ctx.beginPath();
+            ctx.moveTo(nd.p[0], nd.p[1]);
+            ctx.lineTo(nd.p[0]+h[0], nd.p[1]+h[1]);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(nd.p[0]+h[0], nd.p[1]+h[1], 3/S.zoom, 0, TAU);
+            ctx.stroke();
+          });
+        }
+      }
+      // vertices
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 1;
+      for(const nd of nodes){
+        ctx.beginPath(); ctx.arc(nd.p[0], nd.p[1], 3.5/S.zoom, 0, TAU); ctx.fill();
+      }
+    } else if(a.type==='ellipse'){
+      ctx.save();
+      ctx.translate(a.x, a.y);
+      ctx.rotate(a.rot);
+      // influence ellipse
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = sel ? 0.6 : 0.35;
+      ctx.lineWidth = (sel?1.5:1)/S.zoom;
+      ctx.beginPath();
+      ctx.ellipse(0,0, a.rx, a.ry, 0, 0, TAU);
+      ctx.stroke();
+      // center dot
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(0,0, 4/S.zoom, 0, TAU); ctx.fill();
+      if(sel){
+        // axis lines + endpoint handles
+        ctx.globalAlpha = 0.7;
+        ctx.lineWidth = 1/S.zoom;
+        ctx.beginPath(); ctx.moveTo(-a.rx,0); ctx.lineTo(a.rx,0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,-a.ry); ctx.lineTo(0,a.ry); ctx.stroke();
+        ctx.globalAlpha = 1;
+        [[a.rx,0],[0,a.ry]].forEach(([x,y])=>{
+          ctx.beginPath(); ctx.arc(x,y, 4/S.zoom, 0, TAU); ctx.fill();
+        });
+      }
+      ctx.restore();
+    } else if(a.type==='gradient'){
+      const [ax,ay] = a.a, [bx,by] = a.b;
+      const dx=bx-ax, dy=by-ay, len=Math.hypot(dx,dy)||1;
+      const nx=-dy/len, ny=dx/len;
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = 0.12;
+      ctx.lineWidth = 2*a.r;
+      ctx.lineCap='butt';
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+      ctx.globalAlpha = sel ? 1 : 0.75;
+      ctx.lineWidth = 1.5/S.zoom;
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 1/S.zoom;
+      const ticks = 8;
+      for(let k=1;k<=ticks;k++){
+        const t = k/ticks;
+        const px = ax + dx*t, py = ay + dy*t;
+        const tickLen = (a.r*0.6) * t;
+        ctx.beginPath();
+        ctx.moveTo(px - nx*tickLen, py - ny*tickLen);
+        ctx.lineTo(px + nx*tickLen, py + ny*tickLen);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = col;
+      const ah = 10/S.zoom;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx - dx/len*ah - nx*ah*0.5, by - dy/len*ah - ny*ah*0.5);
+      ctx.lineTo(bx - dx/len*ah + nx*ah*0.5, by - dy/len*ah + ny*ah*0.5);
+      ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 1.5/S.zoom;
+      ctx.strokeStyle = col;
+      ctx.beginPath(); ctx.arc(ax,ay, 5/S.zoom, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(bx,by, 4/S.zoom, 0, TAU); ctx.fill();
+    } else {
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = sel ? 0.6 : 0.35;
+      ctx.lineWidth = (sel?1.5:1)/S.zoom;
+      ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(a.x, a.y, 4/S.zoom, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+function drawDraft(){
+  if(!S.draft) return;
+  const d = S.draft;
+  const nodes = d.nodes;
+  ctx.save();
+  ctx.strokeStyle = '#7cf2c1';
+  ctx.fillStyle = '#7cf2c1';
+  ctx.lineWidth = 1.2/S.zoom;
+
+  // draw committed bezier segments solid
+  if(nodes.length>=2){
+    ctx.beginPath();
+    ctx.moveTo(nodes[0].p[0], nodes[0].p[1]);
+    for(let k=0;k<nodes.length-1;k++){
+      const A = nodes[k], B = nodes[k+1];
+      ctx.bezierCurveTo(
+        A.p[0]+A.hOut[0], A.p[1]+A.hOut[1],
+        B.p[0]+B.hIn[0],  B.p[1]+B.hIn[1],
+        B.p[0], B.p[1]
+      );
+    }
+    ctx.stroke();
+  }
+  // dashed preview from last node to cursor
+  if(nodes.length){
+    const last = nodes[nodes.length-1];
+    ctx.setLineDash([6/S.zoom, 4/S.zoom]);
+    ctx.beginPath();
+    ctx.moveTo(last.p[0]+last.hOut[0], last.p[1]+last.hOut[1]);
+    ctx.lineTo(S.mouseW[0], S.mouseW[1]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  // handles on nodes
+  for(const nd of nodes){
+    [nd.hIn, nd.hOut].forEach(h => {
+      if(h[0]===0 && h[1]===0) return;
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(nd.p[0], nd.p[1]);
+      ctx.lineTo(nd.p[0]+h[0], nd.p[1]+h[1]);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(nd.p[0]+h[0], nd.p[1]+h[1], 3/S.zoom, 0, TAU);
+      ctx.stroke();
+    });
+  }
+  ctx.globalAlpha = 1;
+  for(const nd of nodes){
+    ctx.beginPath(); ctx.arc(nd.p[0], nd.p[1], 4/S.zoom, 0, TAU); ctx.fill();
+  }
+  // highlight first vertex when close (to close the path)
+  if(nodes.length>1){
+    const [fx,fy] = nodes[0].p;
+    const dist = Math.hypot(S.mouseW[0]-fx, S.mouseW[1]-fy);
+    if(dist*S.zoom < 12){
+      ctx.strokeStyle='#ff7a59';
+      ctx.lineWidth=2/S.zoom;
+      ctx.beginPath(); ctx.arc(fx,fy, 7/S.zoom, 0, TAU); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+// ---------- bindings ----------
+function bindRange(id, key, fmt=v=>v, onChange){
+  const el = $(id), v = $(id+'V');
+  const apply = (n, fromNum) => {
+    if(isNaN(n)) return;
+    const min = parseFloat(el.min), max = parseFloat(el.max);
+    if(!isNaN(min)) n = Math.max(min, n);
+    if(!isNaN(max)) n = Math.min(max, n);
+    S[key] = n;
+    if(fromNum) el.value = n;
+    else v.value = fmt(n);
+    if(onChange) onChange(n);
+    draw();
+  };
+  el.addEventListener('input', () => apply(parseFloat(el.value), false));
+  v.addEventListener('input',  () => apply(parseFloat(v.value),  true));
+  v.addEventListener('change', () => { v.value = fmt(S[key]); });
+  apply(parseFloat(el.value), false);
+}
+bindRange('size','size', v=>v.toFixed(0));
+bindRange('scale','scale', v=>v.toFixed(2));
+bindRange('corner','corner', v=>v.toFixed(0));
+bindRange('jitter','jitter', v=>v.toFixed(2));
+bindRange('stroke','stroke', v=>v.toFixed(1));
+bindRange('aStrength','aStrength', v=>v.toFixed(2), v=>{
+  if(S.selected>=0 && S.attractors[S.selected]){
+    S.attractors[S.selected].strength = v;
+    renderAList();
+  }
+});
+bindRange('aFalloff','aFalloff', v=>v.toFixed(0), v=>{
+  const a = S.attractors[S.selected]; if(!a) return;
+  const prev = a.r || v;
+  a.r = v;
+  if(a.inner != null && a.inner > v){
+    a.inner = v;
+    S.aInner = v;
+    $('aInner').value = v; $('aInnerV').value = Math.round(v);
+  }
+  if(a.type==='ellipse'){
+    const k = v / (prev || 1);
+    a.rx = Math.max(1, a.rx * k);
+    a.ry = Math.max(1, a.ry * k);
+    invalidateFlat(a);
+  }
+});
+bindRange('aInner','aInner', v=>v.toFixed(0), v=>{
+  const a = S.attractors[S.selected]; if(!a) return;
+  a.inner = clamp(v, 0, a.r);
+  if(a.inner !== v){
+    S.aInner = a.inner;
+    $('aInner').value = a.inner; $('aInnerV').value = Math.round(a.inner);
+  }
+});
+bindRange('aCurve','aCurve', v=>v.toFixed(2), v=>{
+  if(S.selected>=0 && S.attractors[S.selected]) S.attractors[S.selected].curve = v;
+});
+
+$('shape').addEventListener('change', e => { S.shape = e.target.value; syncShapeUI(); draw(); });
+bindRange('starN','starN', v=>v.toFixed(0));
+bindRange('starInner','starInner', v=>v.toFixed(2));
+
+function syncShapeUI(){
+  $('starBox').style.display   = S.shape==='star'   ? 'block' : 'none';
+  $('customBox').style.display = S.shape==='custom' ? 'block' : 'none';
+  $('cornerRow').style.display = S.shape==='square' ? '' : 'none';
+  if(S.shape==='custom') drawEditor();
+}
+syncShapeUI();
+
+// ---------- custom shape editor ----------
+const sEd = $('shapeEd'); const sCtx = sEd.getContext('2d');
+const PRESETS = {
+  tri:   { closed:true, pts:[[0,-0.5],[0.5,0.4],[-0.5,0.4]] },
+  arrow: { closed:true, pts:[[-0.5,-0.2],[0.1,-0.2],[0.1,-0.45],[0.5,0],[0.1,0.45],[0.1,0.2],[-0.5,0.2]] },
+  heart: { closed:true, pts:(()=>{
+    const a=[]; for(let k=0;k<28;k++){ const t=k/28*TAU;
+      const x=16*Math.pow(Math.sin(t),3);
+      const y=-(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
+      a.push([x/34, y/34]); } return a;
+  })() },
+  hex:   { closed:true, pts:(()=>{
+    const a=[]; for(let k=0;k<6;k++){ const t=-Math.PI/2 + k*TAU/6;
+      a.push([Math.cos(t)*0.5, Math.sin(t)*0.5]); } return a;
+  })() },
+  // Classic houndstooth "tooth" silhouette — 12-vertex polygon on a 4×4 grid,
+  // normalised to the [-0.5, 0.5] unit cell. The two diagonal edges create
+  // the characteristic broken-check teeth that tile together.
+  houndstooth: { closed:true, pts:[
+    [-0.5,-0.25],[-0.25,-0.25],[-0.25,-0.5],[ 0.25,-0.5],
+    [ 0.00,-0.25],[ 0.50,-0.25],[ 0.50, 0.25],[ 0.25, 0.25],
+    [ 0.25, 0.50],[-0.25, 0.50],[ 0.00, 0.25],[-0.50, 0.25]
+  ] },
+};
+document.querySelectorAll('#customPreset button').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const p = PRESETS[b.dataset.p]; if(!p) return;
+    S.customPts = p.pts.map(q=>q.slice());
+    S.customClosed = p.closed;
+    drawEditor(); draw();
+  });
+});
+
+let edDrag = -1;
+const edToLocal = (x,y) => {
+  const r = sEd.getBoundingClientRect();
+  const px = (x - r.left) / r.width * sEd.width;
+  const py = (y - r.top) / r.height * sEd.height;
+  return [px/sEd.width - 0.5, py/sEd.height - 0.5];
+};
+const edToCanvas = (lx,ly) => [ (lx+0.5)*sEd.width, (ly+0.5)*sEd.height ];
+
+function drawEditor(){
+  const W = sEd.width, H = sEd.height;
+  sCtx.fillStyle = '#1c1f25';
+  sCtx.fillRect(0,0,W,H);
+  // grid
+  sCtx.strokeStyle = '#2a2e36';
+  sCtx.lineWidth = 1;
+  for(let i=1;i<8;i++){
+    sCtx.beginPath();
+    sCtx.moveTo(i*W/8,0); sCtx.lineTo(i*W/8,H); sCtx.stroke();
+    sCtx.beginPath();
+    sCtx.moveTo(0,i*H/8); sCtx.lineTo(W,i*H/8); sCtx.stroke();
+  }
+  // center cross
+  sCtx.strokeStyle = '#3a4048';
+  sCtx.beginPath(); sCtx.moveTo(W/2,0); sCtx.lineTo(W/2,H); sCtx.stroke();
+  sCtx.beginPath(); sCtx.moveTo(0,H/2); sCtx.lineTo(W,H/2); sCtx.stroke();
+  // cell bounds at 50%
+  sCtx.strokeStyle = '#4a5058';
+  sCtx.setLineDash([4,3]);
+  sCtx.strokeRect(W*0.125, H*0.125, W*0.75, H*0.75);
+  sCtx.setLineDash([]);
+
+  // shape fill
+  const pts = S.customPts;
+  if(pts.length>=2){
+    sCtx.fillStyle = 'rgba(124,242,193,0.18)';
+    sCtx.strokeStyle = '#7cf2c1';
+    sCtx.lineWidth = 1.5;
+    sCtx.beginPath();
+    pts.forEach(([x,y],k)=>{
+      const [cx,cy] = edToCanvas(x,y);
+      k? sCtx.lineTo(cx,cy) : sCtx.moveTo(cx,cy);
+    });
+    if(S.customClosed){ sCtx.closePath(); sCtx.fill(); }
+    sCtx.stroke();
+  }
+  // vertices
+  sCtx.fillStyle = '#7cf2c1';
+  pts.forEach(([x,y],k)=>{
+    const [cx,cy] = edToCanvas(x,y);
+    sCtx.beginPath();
+    sCtx.arc(cx,cy, k===0 ? 5 : 3.5, 0, TAU);
+    sCtx.fill();
+  });
+  $('vCount').textContent = pts.length;
+}
+
+function pickEdVertex(lx,ly){
+  const tol = 0.04;
+  let hit=-1, bd=tol;
+  S.customPts.forEach(([x,y],k)=>{
+    const d = Math.hypot(x-lx, y-ly);
+    if(d<bd){ bd=d; hit=k; }
+  });
+  return hit;
+}
+
+function nearestEdgeInsert(lx, ly){
+  const pts = S.customPts;
+  if(pts.length<2) return pts.length;
+  let bestI = -1, bd = Infinity;
+  const n = pts.length;
+  const segs = S.customClosed ? n : n-1;
+  for(let i=0;i<segs;i++){
+    const a = pts[i], b = pts[(i+1)%n];
+    const [d] = distToSeg(lx,ly, a[0],a[1], b[0],b[1]);
+    if(d<bd){ bd=d; bestI=i; }
+  }
+  return bestI + 1; // insert after the start vertex of the nearest edge
+}
+
+sEd.addEventListener('mousedown', e=>{
+  const [lx,ly] = edToLocal(e.clientX, e.clientY);
+  const hit = pickEdVertex(lx,ly);
+  if(e.button===2){ // right-click remove
+    if(hit>=0){ pushHistory(); S.customPts.splice(hit,1); drawEditor(); draw(); }
+    return;
+  }
+  if(hit>=0){ edDrag = hit; }
+  else {
+    pushHistory();
+    const pt = [clamp(lx,-0.5,0.5), clamp(ly,-0.5,0.5)];
+    const at = nearestEdgeInsert(lx, ly);
+    S.customPts.splice(at, 0, pt);
+    edDrag = at;
+    drawEditor(); draw();
+  }
+});
+sEd.addEventListener('dblclick', e=>{
+  const [lx,ly] = edToLocal(e.clientX, e.clientY);
+  const hit = pickEdVertex(lx,ly);
+  if(hit>=0){ S.customPts.splice(hit,1); drawEditor(); draw(); }
+});
+sEd.addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('mousemove', e=>{
+  if(edDrag<0) return;
+  const [lx,ly] = edToLocal(e.clientX, e.clientY);
+  S.customPts[edDrag] = [clamp(lx,-0.5,0.5), clamp(ly,-0.5,0.5)];
+  drawEditor(); draw();
+});
+addEventListener('mouseup', ()=>{ edDrag=-1; });
+
+$('shapeClear').addEventListener('click', ()=>{
+  S.customPts = []; drawEditor(); draw();
+});
+$('shapeClose').addEventListener('click', ()=>{
+  S.customClosed = !S.customClosed; drawEditor(); draw();
+});
+$('tileType').addEventListener('change', e => { S.tileType = e.target.value; draw(); });
+$('bg').addEventListener('input', e => { S.bg = e.target.value; draw(); });
+$('fg').addEventListener('input', e => { S.fg = e.target.value; draw(); });
+$('fill').addEventListener('change', e => { S.fill = e.target.checked; draw(); });
+$('mute').addEventListener('change', e => { S.muteAttractors = e.target.checked; draw(); });
+$('hideA').addEventListener('change', e => { S.hideAttractors = e.target.checked; draw(); });
+
+$('swap').addEventListener('click', () => {
+  const t = S.bg; S.bg = S.fg; S.fg = t;
+  $('bg').value = S.bg; $('fg').value = S.fg;
+  draw();
+});
+
+$('resetView').addEventListener('click', () => {
+  S.zoom = 1; S.panX = S.w/2; S.panY = S.h/2; draw();
+});
+
+document.querySelectorAll('#amode button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#amode button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    S.aMode = b.dataset.m;
+    if(S.selected>=0 && S.attractors[S.selected]){
+      S.attractors[S.selected].mode = S.aMode;
+      renderAList();
+    }
+    draw();
+  });
+});
+document.querySelectorAll('#atool button').forEach(b => {
+  b.addEventListener('click', () => pickTool(b.dataset.t));
+});
+
+$('clearA').addEventListener('click', () => {
+  if(!S.attractors.length) return;
+  pushHistory();
+  S.attractors = []; S.selected = -1; cancelDraft(); updateSelPill(); renderAList(); draw();
+});
+$('closePath').addEventListener('click', () => commitDraft(true));
+
+function updateSelPill(){
+  const p = $('selPill');
+  if(S.selected<0){ p.textContent='none selected'; p.classList.remove('on'); }
+  else {
+    const a = S.attractors[S.selected];
+    p.textContent = a.name || `#${S.selected+1} ${a.type}`;
+    p.classList.add('on');
+  }
+}
+function defaultName(a, i){ return `#${i+1} ${a.type}`; }
+
+function renderAList(){
+  const list = $('aList'); list.innerHTML = '';
+  if(!S.attractors.length){
+    list.innerHTML = '<div class="empty">No attractors — click the canvas to add one.</div>';
+    return;
+  }
+  S.attractors.forEach((a,i)=>{
+    const el = document.createElement('div');
+    el.className = 'aItem' + (i===S.selected ? ' on' : '');
+
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.className = 'name';
+    name.value = a.name || defaultName(a, i);
+    name.title = 'Click to rename';
+    name.addEventListener('pointerdown', ev => { ev.stopPropagation(); });
+    name.addEventListener('keydown', ev => {
+      if(ev.key === 'Enter'){ name.blur(); }
+      else if(ev.key === 'Escape'){ name.value = a.name || defaultName(a, i); name.blur(); }
+    });
+    name.addEventListener('change', () => {
+      const v = name.value.trim();
+      const next = v || defaultName(a, i);
+      const cur  = a.name || defaultName(a, i);
+      if(next === cur){ name.value = next; return; }
+      pushHistory();
+      a.name = next;
+      name.value = next;
+    });
+
+    const mute = document.createElement('button');
+    mute.className = 'btn mute' + (a.muted ? ' off' : '');
+    mute.title = a.muted ? 'Unmute this attractor' : 'Mute this attractor';
+    mute.textContent = a.muted ? '◌' : '●';
+    mute.addEventListener('click', ev => {
+      ev.stopPropagation();
+      pushHistory();
+      a.muted = !a.muted;
+      renderAList(); draw();
+    });
+
+    const dup = document.createElement('button');
+    dup.className = 'btn dup'; dup.title = 'Duplicate'; dup.textContent = '⧉';
+    dup.addEventListener('click', ev => {
+      ev.stopPropagation();
+      pushHistory();
+      duplicateAttractor(i);
+    });
+
+    const x = document.createElement('button');
+    x.className = 'btn x'; x.title = 'Delete'; x.textContent = '×';
+    x.addEventListener('click', ev => {
+      ev.stopPropagation();
+      pushHistory();
+      S.attractors.splice(i,1);
+      if(S.selected===i) selectAttractor(-1);
+      else if(S.selected>i) S.selected--;
+      renderAList(); draw();
+    });
+
+    if(a.muted) el.classList.add('muted');
+    el.appendChild(name); el.appendChild(mute); el.appendChild(dup); el.appendChild(x);
+    el.addEventListener('click', ev => {
+      if(ev.target === name || ev.target === mute || ev.target === dup || ev.target === x) return;
+      selectAttractor(i); draw();
+    });
+    list.appendChild(el);
+  });
+}
+
+function offsetAttractor(a, dx, dy){
+  if(a.type==='pen'){
+    for(const nd of a.nodes){ nd.p[0]+=dx; nd.p[1]+=dy; }
+    invalidateFlat(a);
+  } else if(a.type==='gradient'){
+    a.a[0]+=dx; a.a[1]+=dy; a.b[0]+=dx; a.b[1]+=dy;
+  } else {
+    a.x += dx; a.y += dy;
+    if(a.type==='ellipse') invalidateFlat(a);
+  }
+}
+
+function duplicateAttractor(i, dxWorld, dyWorld){
+  const src = S.attractors[i];
+  const clone = JSON.parse(JSON.stringify(src));
+  delete clone._flat;
+  // default offset = 20 screen px (converted to world)
+  const dx = dxWorld !== undefined ? dxWorld : 20/S.zoom;
+  const dy = dyWorld !== undefined ? dyWorld : 20/S.zoom;
+  offsetAttractor(clone, dx, dy);
+  const base = (clone.name || defaultName(src, i)).replace(/ copy( \d+)?$/, '');
+  // Avoid name collision
+  let n = 1, candidate;
+  do { candidate = n===1 ? `${base} copy` : `${base} copy ${n}`; n++; }
+  while(S.attractors.some(a => a.name === candidate));
+  clone.name = candidate;
+  S.attractors.push(clone);
+  selectAttractor(S.attractors.length-1);
+  renderAList();
+  draw();
+  return S.attractors.length-1;
+}
+function selectAttractor(i){
+  S.selected = i;
+  if(i>=0){
+    const a = S.attractors[i];
+    S.aFalloff  = a.r;
+    S.aInner    = a.inner || 0;
+    S.aStrength = a.strength;
+    S.aCurve    = a.curve;
+    S.aMode     = a.mode;
+    $('aFalloff').value  = a.r;        $('aFalloffV').value  = Math.round(a.r);
+    $('aInner').value    = S.aInner;   $('aInnerV').value    = Math.round(S.aInner);
+    $('aStrength').value = a.strength; $('aStrengthV').value = a.strength.toFixed(2);
+    $('aCurve').value    = a.curve;    $('aCurveV').value    = a.curve.toFixed(2);
+    document.querySelectorAll('#amode button').forEach(b =>
+      b.classList.toggle('on', b.dataset.m === a.mode));
+  }
+  updateSelPill();
+  renderAList();
+}
+
+// ---------- pen draft ----------
+function startDraft(){ S.draft = { nodes:[], dragNode:-1 }; }
+function cancelDraft(){ S.draft = null; draw(); }
+function commitDraft(closed){
+  if(!S.draft || S.draft.nodes.length<2){ S.draft = null; draw(); return; }
+  pushHistory();
+  S.attractors.push({
+    type:'pen', nodes:S.draft.nodes, r:S.aFalloff, inner:S.aInner||0, closed:!!closed,
+    mode:S.aMode, strength:S.aStrength, curve:S.aCurve
+  });
+  S.draft = null;
+  selectAttractor(S.attractors.length-1);
+  draw();
+}
+
+// ---------- pick / drag ----------
+let drag = null;
+let panning = false;
+let panStart = null;
+
+// vertex encoding:
+//   -1       = body / edge hit
+//   pen:     k*10 + (0: point, 1: hIn handle, 2: hOut handle)
+//   ellipse: 0 = center, 1 = +rx endpoint, 2 = +ry endpoint
+//   gradient: 0 = A, 1 = B
+function pickAttractor(wx, wy, tolPx){
+  const tol = tolPx / S.zoom;
+  let hitI=-1, hitV=-1, bd=tol;
+  for(let i=0;i<S.attractors.length;i++){
+    const a = S.attractors[i];
+    if(a.type==='pen'){
+      for(let k=0;k<a.nodes.length;k++){
+        const nd = a.nodes[k];
+        const p  = nd.p;
+        const dP = Math.hypot(p[0]-wx, p[1]-wy);
+        if(dP<bd){ bd=dP; hitI=i; hitV=k*10+0; }
+        if(i===S.selected){ // only manipulate handles on selected path
+          const hIx = p[0]+nd.hIn[0],  hIy = p[1]+nd.hIn[1];
+          const hOx = p[0]+nd.hOut[0], hOy = p[1]+nd.hOut[1];
+          if(nd.hIn[0]||nd.hIn[1]){
+            const d = Math.hypot(hIx-wx, hIy-wy);
+            if(d<bd){ bd=d; hitI=i; hitV=k*10+1; }
+          }
+          if(nd.hOut[0]||nd.hOut[1]){
+            const d = Math.hypot(hOx-wx, hOy-wy);
+            if(d<bd){ bd=d; hitI=i; hitV=k*10+2; }
+          }
+        }
+      }
+    } else if(a.type==='ellipse'){
+      const dC = Math.hypot(a.x-wx, a.y-wy);
+      if(dC<bd){ bd=dC; hitI=i; hitV=0; }
+      if(i===S.selected){
+        const c=Math.cos(a.rot), s=Math.sin(a.rot);
+        const ax=a.x+c*a.rx, ay=a.y+s*a.rx;
+        const bx=a.x-s*a.ry, by=a.y+c*a.ry;
+        const dA=Math.hypot(ax-wx,ay-wy), dB=Math.hypot(bx-wx,by-wy);
+        if(dA<bd){ bd=dA; hitI=i; hitV=1; }
+        if(dB<bd){ bd=dB; hitI=i; hitV=2; }
+      }
+    } else if(a.type==='gradient'){
+      const dA = Math.hypot(a.a[0]-wx, a.a[1]-wy);
+      const dB = Math.hypot(a.b[0]-wx, a.b[1]-wy);
+      if(dA<bd){ bd=dA; hitI=i; hitV=0; }
+      if(dB<bd){ bd=dB; hitI=i; hitV=1; }
+    } else {
+      const d = Math.hypot(a.x-wx, a.y-wy);
+      if(d<bd){ bd=d; hitI=i; hitV=-1; }
+    }
+  }
+  if(hitI>=0) return {i:hitI, vertex:hitV};
+  bd = tol;
+  for(let i=0;i<S.attractors.length;i++){
+    const a = S.attractors[i];
+    if(a.type==='pen' && a.nodes.length>=2){
+      const flat = a._flat || (a._flat = flattenBezier(a.nodes, a.closed));
+      const d = nearestOnPoly(wx,wy, flat, a.closed)[0];
+      if(d<bd){ bd=d; hitI=i; }
+    } else if(a.type==='gradient'){
+      const [,,,d] = gradientProject(a, wx, wy);
+      if(d<bd){ bd=d; hitI=i; }
+    } else if(a.type==='ellipse'){
+      const flat = a._flat || (a._flat = flattenEllipse(a));
+      const d = nearestOnPoly(wx, wy, flat, true)[0];
+      if(d<bd){ bd=d; hitI=i; }
+    }
+  }
+  return hitI>=0 ? {i:hitI, vertex:-1} : null;
+}
+
+// Nearest existing pen path (used for cursor-feedback + insert-on-path).
+// Returns {i, seg, t, point:[x,y], worldDist} or null.
+function nearestPenHit(wx, wy, tolPx){
+  const tol = tolPx / S.zoom;
+  let best = null;
+  for(let i=0;i<S.attractors.length;i++){
+    const a = S.attractors[i];
+    if(a.type!=='pen' || !a.nodes || a.nodes.length<2) continue;
+    const n = a.nodes.length;
+    const segs = a.closed ? n : n-1;
+    const SUBS = 30;
+    for(let si=0; si<segs; si++){
+      const A = a.nodes[si], B = a.nodes[(si+1)%n];
+      const p0=A.p, p3=B.p;
+      const p1=[p0[0]+A.hOut[0], p0[1]+A.hOut[1]];
+      const p2=[p3[0]+B.hIn[0],  p3[1]+B.hIn[1]];
+      let prev = p0;
+      for(let k=1;k<=SUBS;k++){
+        const t=k/SUBS, u=1-t, uu=u*u, tt=t*t;
+        const x = uu*u*p0[0] + 3*uu*t*p1[0] + 3*u*tt*p2[0] + tt*t*p3[0];
+        const y = uu*u*p0[1] + 3*uu*t*p1[1] + 3*u*tt*p2[1] + tt*t*p3[1];
+        const [d,cx,cy] = distToSeg(wx,wy, prev[0],prev[1], x,y);
+        if(d<tol && (!best || d<best.worldDist)){
+          best = {i, seg:si, t:(k-0.5)/SUBS, point:[cx,cy], worldDist:d};
+        }
+        prev=[x,y];
+      }
+    }
+  }
+  return best;
+}
+
+// Subdivide cubic bezier at t; returns {mid, leftHOut, rightHIn, midHIn, midHOut}
+function bezierSplit(p0,p1,p2,p3, t){
+  const L = (a,b)=>[a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+  const q0=L(p0,p1), q1=L(p1,p2), q2=L(p2,p3);
+  const r0=L(q0,q1), r1=L(q1,q2);
+  const s =L(r0,r1);
+  // New node at s, with mirrored-to-tangent handles: hIn=r0-s, hOut=r1-s
+  return {
+    mid:s,
+    newLeftHOut:[q0[0]-p0[0], q0[1]-p0[1]],    // replaces A.hOut
+    newRightHIn:[q2[0]-p3[0], q2[1]-p3[1]],    // replaces B.hIn
+    midHIn:[r0[0]-s[0], r0[1]-s[1]],
+    midHOut:[r1[0]-s[0], r1[1]-s[1]],
+  };
+}
+
+// Insert a new node into an existing pen attractor at the nearest-curve point.
+function insertPenVertex(attractor, wx, wy){
+  const a = attractor;
+  const n = a.nodes.length;
+  const segs = a.closed ? n : n-1;
+  const SUBS = 60;
+  let bestSeg=-1, bestT=0, bd=Infinity;
+  for(let si=0; si<segs; si++){
+    const A = a.nodes[si], B = a.nodes[(si+1)%n];
+    const p0=A.p, p3=B.p;
+    const p1=[p0[0]+A.hOut[0], p0[1]+A.hOut[1]];
+    const p2=[p3[0]+B.hIn[0],  p3[1]+B.hIn[1]];
+    for(let k=0;k<=SUBS;k++){
+      const t=k/SUBS, u=1-t, uu=u*u, tt=t*t;
+      const x = uu*u*p0[0] + 3*uu*t*p1[0] + 3*u*tt*p2[0] + tt*t*p3[0];
+      const y = uu*u*p0[1] + 3*uu*t*p1[1] + 3*u*tt*p2[1] + tt*t*p3[1];
+      const d = Math.hypot(x-wx, y-wy);
+      if(d<bd){ bd=d; bestSeg=si; bestT=t; }
+    }
+  }
+  if(bestSeg<0) return -1;
+  const A = a.nodes[bestSeg], B = a.nodes[(bestSeg+1)%n];
+  const p0=A.p, p3=B.p;
+  const p1=[p0[0]+A.hOut[0], p0[1]+A.hOut[1]];
+  const p2=[p3[0]+B.hIn[0],  p3[1]+B.hIn[1]];
+  const sp = bezierSplit(p0,p1,p2,p3, bestT);
+  A.hOut = sp.newLeftHOut;
+  B.hIn  = sp.newRightHIn;
+  const newNode = { p:sp.mid, hIn:sp.midHIn, hOut:sp.midHOut };
+  a.nodes.splice(bestSeg+1, 0, newNode);
+  invalidateFlat(a);
+  return bestSeg+1;
+}
+
+cnv.addEventListener('contextmenu', e => e.preventDefault());
+
+cnv.addEventListener('mousedown', e => {
+  const r = cnv.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const [wx,wy] = screenToWorld(sx,sy);
+
+  if(S.spaceDown || e.button === 1){
+    panning = true;
+    panStart = {sx, sy, panX:S.panX, panY:S.panY};
+    e.preventDefault();
+    return;
+  }
+
+  if(e.button === 2){
+    const hit = pickAttractor(wx,wy, 12);
+    if(hit){
+      pushHistory();
+      S.attractors.splice(hit.i,1);
+      if(S.selected===hit.i) selectAttractor(-1);
+      else if(S.selected>hit.i) S.selected--;
+      renderAList(); draw();
+    }
+    return;
+  }
+
+  // Free-transform: scale handles on the selected pen/ellipse attractor.
+  // A vertex/handle hit on the selected attractor wins, so dragging a node
+  // at an extremum still drags the node rather than starting a scale drag.
+  if(S.selected>=0 && !S.hideAttractors){
+    const selA = S.attractors[S.selected];
+    if(selA && (selA.type==='pen' || selA.type==='ellipse')){
+      const vh = pickAttractor(wx, wy, 10);
+      const onVertex = vh && vh.i===S.selected && vh.vertex !== -1;
+      const bb = onVertex ? null : attractorBBox(selA);
+      if(bb){
+        const corners = bboxCorners(bb);
+        const tol = 10 / S.zoom;
+        for(let c=0;c<4;c++){
+          const d = Math.hypot(corners[c][0]-wx, corners[c][1]-wy);
+          if(d < tol){
+            pushHistory();
+            drag = {
+              i: S.selected, vertex: 'scale',
+              pivot: corners[(c+2)%4],
+              start: [wx, wy],
+              startSnap: JSON.parse(JSON.stringify({...selA, _flat:undefined})),
+              uniform: e.shiftKey,
+              lastX: wx, lastY: wy,
+            };
+            draw();
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  if(S.tool==='pen'){
+    // 0) Alt+click on existing pen path → duplicate & drag the clone
+    if(e.altKey && !S.draft){
+      let srcI = -1;
+      const hitV = pickAttractor(wx,wy, 12);
+      if(hitV && S.attractors[hitV.i].type==='pen') srcI = hitV.i;
+      else {
+        const ph = nearestPenHit(wx, wy, 12);
+        if(ph) srcI = ph.i;
+      }
+      if(srcI>=0){
+        pushHistory();
+        const newI = duplicateAttractor(srcI, 0, 0);
+        drag = { i:newI, vertex:-1, lastX:wx, lastY:wy };
+        cnv.style.cursor = 'grabbing';
+        draw();
+        return;
+      }
+    }
+    // 1) First priority: drag existing vertex/handle on selected pen
+    const hit = pickAttractor(wx,wy, 10);
+    if(hit && S.attractors[hit.i].type==='pen' && hit.vertex>=0){
+      pushHistory();
+      selectAttractor(hit.i);
+      drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
+      return;
+    }
+    // 2) Currently drafting a path
+    if(S.draft){
+      // close if clicking on first vertex
+      if(S.draft.nodes.length>=2){
+        const [fx,fy] = S.draft.nodes[0].p;
+        if(Math.hypot(wx-fx, wy-fy)*S.zoom < 12){ commitDraft(true); return; }
+      }
+      S.draft.nodes.push({ p:[wx,wy], hIn:[0,0], hOut:[0,0] });
+      S.draft.dragNode = S.draft.nodes.length-1; // drag to set handles
+      draw();
+      return;
+    }
+    // 3) Near an existing pen path → insert a new vertex there
+    const penHit = nearestPenHit(wx, wy, 10);
+    if(penHit){
+      pushHistory();
+      const idx = insertPenVertex(S.attractors[penHit.i], wx, wy);
+      selectAttractor(penHit.i);
+      drag = { i:penHit.i, vertex:idx*10+0, lastX:wx, lastY:wy };
+      draw();
+      return;
+    }
+    // 4) Otherwise start a new pen draft at this point
+    startDraft();
+    S.draft.nodes.push({ p:[wx,wy], hIn:[0,0], hOut:[0,0] });
+    S.draft.dragNode = 0;
+    draw();
+    return;
+  }
+
+  if(S.tool==='gradient'){
+    const hit = pickAttractor(wx,wy, 12);
+    pushHistory();
+    if(hit && S.attractors[hit.i].type==='gradient'){
+      selectAttractor(hit.i);
+      drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
+    } else {
+      S.attractors.push({ type:'gradient', a:[wx,wy], b:[wx,wy], r:S.aFalloff, inner:S.aInner||0,
+        mode:S.aMode, strength:S.aStrength, curve:S.aCurve });
+      const i = S.attractors.length-1;
+      selectAttractor(i);
+      drag = { i, vertex:1, lastX:wx, lastY:wy };
+    }
+    draw();
+    return;
+  }
+
+  if(S.tool==='ellipse'){
+    const hit = pickAttractor(wx,wy, 12);
+    pushHistory();
+    if(hit && S.attractors[hit.i].type==='ellipse'){
+      selectAttractor(hit.i);
+      drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
+    } else {
+      S.attractors.push({
+        type:'ellipse', x:wx, y:wy, rx:1, ry:1, rot:0,
+        r:S.aFalloff, inner:S.aInner||0, mode:S.aMode, strength:S.aStrength, curve:S.aCurve
+      });
+      const i = S.attractors.length-1;
+      selectAttractor(i);
+      // Creation drag: click = center; drag vector sets rx (|dx|) and ry (|dy|)
+      drag = { i, vertex:'createEllipse', startX:wx, startY:wy, lastX:wx, lastY:wy };
+    }
+    draw();
+    return;
+  }
+
+  const hit = pickAttractor(wx,wy, 12);
+  pushHistory();
+  if(hit){
+    selectAttractor(hit.i);
+    drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
+  } else {
+    S.attractors.push({ type:'point', x:wx, y:wy, r:S.aFalloff, inner:S.aInner||0,
+      mode:S.aMode, strength:S.aStrength, curve:S.aCurve });
+    selectAttractor(S.attractors.length-1);
+    drag = { i:S.attractors.length-1, vertex:-1, lastX:wx, lastY:wy };
+  }
+  draw();
+});
+
+cnv.addEventListener('dblclick', () => {
+  if(S.tool==='pen' && S.draft){ commitDraft(false); }
+});
+
+addEventListener('mousemove', e => {
+  const r = cnv.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const [wx,wy] = screenToWorld(sx,sy);
+  S.mouseW = [wx,wy];
+
+  if(panning){
+    S.panX = panStart.panX + (sx - panStart.sx);
+    S.panY = panStart.panY + (sy - panStart.sy);
+    draw(); return;
+  }
+
+  // Pen draft: drag to set the outgoing handle of the last-added node (smooth point)
+  if(S.tool==='pen' && S.draft){
+    if(drag==null && S.draft.dragNode>=0 && (e.buttons & 1)){
+      const nd = S.draft.nodes[S.draft.dragNode];
+      const hx = wx - nd.p[0], hy = wy - nd.p[1];
+      nd.hOut = [hx, hy];
+      nd.hIn  = [-hx, -hy];
+    }
+    draw();
+    updatePenCursor();
+    return;
+  }
+
+  // Cursor feedback when Pen tool is active (not drafting, no drag)
+  if(S.tool==='pen' && !drag){ updatePenCursor(); }
+
+  if(drag==null) return;
+  const a = S.attractors[drag.i];
+
+  // Free-transform scale drag
+  if(drag.vertex === 'scale'){
+    const px = drag.pivot[0], py = drag.pivot[1];
+    const sx = drag.start[0], sy = drag.start[1];
+    let kx = (wx-px)/((sx-px) || 1e-9);
+    let ky = (wy-py)/((sy-py) || 1e-9);
+    const uniform = e.shiftKey || drag.uniform || a.type==='ellipse';
+    if(uniform){ const k = Math.max(Math.abs(kx), Math.abs(ky)); kx = Math.sign(kx||1)*k; ky = Math.sign(ky||1)*k; }
+    const src = drag.startSnap;
+    if(a.type==='pen'){
+      for(let n=0;n<a.nodes.length;n++){
+        const sn = src.nodes[n];
+        a.nodes[n].p[0] = px + (sn.p[0]-px)*kx;
+        a.nodes[n].p[1] = py + (sn.p[1]-py)*ky;
+        a.nodes[n].hIn[0]  = sn.hIn[0]*kx;
+        a.nodes[n].hIn[1]  = sn.hIn[1]*ky;
+        a.nodes[n].hOut[0] = sn.hOut[0]*kx;
+        a.nodes[n].hOut[1] = sn.hOut[1]*ky;
+      }
+    } else if(a.type==='ellipse'){
+      const k = Math.abs(kx); // uniform for ellipse
+      a.x  = px + (src.x-px)*kx;
+      a.y  = py + (src.y-py)*ky;
+      a.rx = Math.max(1, src.rx * k);
+      a.ry = Math.max(1, src.ry * k);
+    }
+    invalidateFlat(a);
+    draw();
+    return;
+  }
+
+  if(a.type==='pen'){
+    const v = drag.vertex;
+    if(v>=0){
+      const k = Math.floor(v/10), kind = v%10;
+      const nd = a.nodes[k];
+      if(kind===0){
+        const dx = wx - nd.p[0], dy = wy - nd.p[1];
+        nd.p = [wx, wy];
+        // move-with-point: handles are relative, stay in place
+      } else if(kind===1){
+        nd.hIn  = [wx - nd.p[0], wy - nd.p[1]];
+        nd.hOut = [-nd.hIn[0], -nd.hIn[1]]; // smooth mirror
+      } else {
+        nd.hOut = [wx - nd.p[0], wy - nd.p[1]];
+        nd.hIn  = [-nd.hOut[0], -nd.hOut[1]];
+      }
+    } else {
+      const dx = wx - drag.lastX, dy = wy - drag.lastY;
+      for(const nd of a.nodes){ nd.p[0]+=dx; nd.p[1]+=dy; }
+    }
+    invalidateFlat(a);
+  } else if(a.type==='ellipse'){
+    const v = drag.vertex;
+    if(v==='createEllipse'){
+      a.rot = 0;
+      a.rx = Math.max(1, Math.abs(wx - drag.startX));
+      a.ry = Math.max(1, Math.abs(wy - drag.startY));
+      invalidateFlat(a);
+    } else if(v===0 || v===-1){
+      const dx = wx - drag.lastX, dy = wy - drag.lastY;
+      a.x += dx; a.y += dy;
+    } else if(v===1){
+      const dx = wx - a.x, dy = wy - a.y;
+      const L = Math.hypot(dx,dy) || 1;
+      a.rot = Math.atan2(dy, dx);
+      a.rx = L;
+      if(!a.ry || a.ry<=0.1) a.ry = L*0.5;
+    } else if(v===2){
+      const dx = wx - a.x, dy = wy - a.y;
+      const c=Math.cos(a.rot), s=Math.sin(a.rot);
+      const ry = Math.abs(dx*(-s) + dy*c);
+      a.ry = Math.max(1, ry);
+    }
+    invalidateFlat(a);
+  } else if(a.type==='gradient'){
+    if(drag.vertex===0)      a.a = [wx,wy];
+    else if(drag.vertex===1) a.b = [wx,wy];
+    else {
+      const dx = wx - drag.lastX, dy = wy - drag.lastY;
+      a.a[0]+=dx; a.a[1]+=dy; a.b[0]+=dx; a.b[1]+=dy;
+    }
+  } else { a.x = wx; a.y = wy; }
+  drag.lastX = wx; drag.lastY = wy;
+  draw();
+});
+
+function updatePenCursor(){
+  if(S.tool!=='pen'){ cnv.style.cursor = 'crosshair'; return; }
+  if(S.draft){ cnv.style.cursor = 'crosshair'; return; }
+  const hit = nearestPenHit(S.mouseW[0], S.mouseW[1], 10);
+  cnv.style.cursor = hit ? 'copy' : 'crosshair';
+}
+
+addEventListener('mouseup', () => {
+  drag = null; panning = false;
+  if(S.draft) S.draft.dragNode = -1;
+});
+
+cnv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = cnv.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+
+  if(e.shiftKey){
+    const [wx,wy] = screenToWorld(sx,sy);
+    const hit = pickAttractor(wx,wy, 9999);
+    if(!hit) return;
+    const now = performance.now();
+    if(now - S.lastWheelPushAt > 500) pushHistory();
+    S.lastWheelPushAt = now;
+    const f = Math.exp(-e.deltaY * 0.0015);
+    const tgt = S.attractors[hit.i];
+    tgt.r = clamp(tgt.r * f, 5, 5000);
+    if(tgt.inner != null && tgt.inner > tgt.r) tgt.inner = tgt.r;
+    if(S.selected===hit.i){
+      $('aFalloff').value = tgt.r;
+      $('aFalloffV').value = Math.round(tgt.r);
+      S.aFalloff = tgt.r;
+      $('aInner').value = tgt.inner || 0;
+      $('aInnerV').value = Math.round(tgt.inner || 0);
+      S.aInner = tgt.inner || 0;
+    }
+    draw();
+    return;
+  }
+
+  // Scroll to zoom (zoom at cursor)
+  const factor = Math.exp(-e.deltaY * 0.0015);
+  const newZoom = clamp(S.zoom * factor, 0.05, 40);
+  S.panX = sx - (sx - S.panX) * (newZoom / S.zoom);
+  S.panY = sy - (sy - S.panY) * (newZoom / S.zoom);
+  S.zoom = newZoom;
+  draw();
+}, {passive:false});
+
+addEventListener('keydown', e => {
+  const mod = e.ctrlKey || e.metaKey;
+  if(mod && (e.key==='z' || e.key==='Z')){
+    e.preventDefault();
+    if(e.shiftKey) redoFn(); else undo();
+    return;
+  }
+  if(mod && (e.key==='y' || e.key==='Y')){ e.preventDefault(); redoFn(); return; }
+  if(mod && (e.key==='d' || e.key==='D')){
+    e.preventDefault();
+    if(S.selected>=0 && S.attractors[S.selected]){
+      pushHistory(); duplicateAttractor(S.selected);
+    }
+    return;
+  }
+  if(e.code==='Space' && !e.repeat){ S.spaceDown = true; cnv.style.cursor='grab'; }
+  if(e.code==='Enter' && S.tool==='pen' && S.draft){ commitDraft(false); }
+  if(e.code==='Escape' && S.tool==='pen' && S.draft){ cancelDraft(); }
+  if(!mod && (e.key==='p' || e.key==='P')){ pickTool('pen'); }
+  if(!mod && (e.key==='v' || e.key==='V')){ pickTool('point'); }
+  if(!mod && (e.key==='e' || e.key==='E')){ pickTool('ellipse'); }
+  if(!mod && (e.key==='g' || e.key==='G')){ pickTool('gradient'); }
+  if(!mod && (e.key==='0')){ S.zoom=1; S.panX=S.w/2; S.panY=S.h/2; draw(); }
+});
+addEventListener('keyup', e => {
+  if(e.code==='Space'){ S.spaceDown = false; cnv.style.cursor='crosshair'; }
+});
+
+function pickTool(t){
+  S.tool = t;
+  document.querySelectorAll('#atool button').forEach(b => b.classList.toggle('on', b.dataset.t===t));
+  if(t!=='pen' && S.draft) cancelDraft();
+  $('toolTag').classList.toggle('on', t==='pen');
+  $('gradTag').classList.toggle('on', t==='gradient');
+  cnv.style.cursor = 'crosshair';
+  draw();
+}
+
+// ---------- export ----------
+$('png').addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.download = `pixpat_${S.shape}_${Date.now()}.png`;
+  link.href = cnv.toDataURL('image/png');
+  link.click();
+});
+
+$('svg').addEventListener('click', () => {
+  const parts = [];
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${S.w}" height="${S.h}" viewBox="0 0 ${S.w} ${S.h}">`);
+  parts.push(`<rect width="100%" height="100%" fill="${S.bg}"/>`);
+  renderSVGGrid(parts);
+  parts.push('</svg>');
+  const blob = new Blob(parts, {type:'image/svg+xml'});
+  const link = document.createElement('a');
+  link.download = `pixpat_${S.shape}_${Date.now()}.svg`;
+  link.href = URL.createObjectURL(blob);
+  link.click();
+});
+
+function renderSVGGrid(out){
+  const s = S.size;
+  const vb = viewBounds();
+  const i0 = Math.floor(vb.x0/s)-1, i1 = Math.ceil(vb.x1/s)+1;
+  const j0 = Math.floor(vb.y0/s)-1, j1 = Math.ceil(vb.y1/s)+1;
+  const sp = S.scale;
+  const baseCorner = S.corner/100;
+
+  const toScreen = (x,y) => [x*S.zoom + S.panX, y*S.zoom + S.panY];
+  const strokeAttr = S.stroke>0 ? ` stroke-width="${S.stroke}"` : '';
+
+  for(let j=j0;j<j1;j++){
+    for(let i=i0;i<i1;i++){
+      let cx = i*s + s/2, cy = j*s + s/2;
+      if(S.tileType==='brick-row' && (j&1)) cx += s/2;
+      if(S.tileType==='brick-col' && (i&1)) cy += s/2;
+
+      const rng = mulberry32(((i*374761393)^(j*668265263)) >>> 0);
+      const f = fields(cx,cy);
+
+      const scale  = clamp(1 + f.scale, 0, 2);
+      const corner = baseCorner;
+      let fillColor = S.fg;
+      let hide = false;
+      if(f.hole < -0.02) hide = true;
+      else if(f.hole !== 0){
+        const t = clamp((f.hole+1)/2, 0, 1);
+        fillColor = mixHex(fillColor, S.bg, 1 - t);
+      }
+      if(hide) continue;
+      const sz = s*Math.max(0.02,scale)*sp;
+      if(sz<=0.5) continue;
+
+      const jx = (rng()*2-1)*S.jitter*s*0.3;
+      const jy = (rng()*2-1)*S.jitter*s*0.3;
+      const [Sx,Sy] = toScreen(cx+jx, cy+jy);
+      const SS = sz * S.zoom;
+      const half = SS/2;
+      const fillA = S.fill ? fillColor : 'none';
+      const strokeA = S.stroke>0 ? ` stroke="${fillColor}"` : '';
+      const t = `transform="translate(${Sx.toFixed(2)},${Sy.toFixed(2)})"`;
+
+      switch(S.shape){
+        case 'circle':
+          out.push(`<circle ${t} r="${half.toFixed(2)}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
+          break;
+        case 'diamond': {
+          const d = `M0 ${-half} L${half} 0 L0 ${half} L${-half} 0 Z`;
+          out.push(`<path ${t} d="${d}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
+          break;
+        }
+        case 'cross': {
+          const tt = SS*0.32, h=half, ht=tt/2;
+          const d = `M${-ht} ${-h} L${ht} ${-h} L${ht} ${-ht} L${h} ${-ht} L${h} ${ht} L${ht} ${ht} L${ht} ${h} L${-ht} ${h} L${-ht} ${ht} L${-h} ${ht} L${-h} ${-ht} L${-ht} ${-ht} Z`;
+          out.push(`<path ${t} d="${d}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
+          break;
+        }
+        case 'dot':
+          out.push(`<circle ${t} r="${(half*0.45).toFixed(2)}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
+          break;
+        case 'star': {
+          const N = S.starN, inner = S.starInner * half;
+          let d = '';
+          for(let k=0;k<N*2;k++){
+            const a = -Math.PI/2 + k*Math.PI/N;
+            const rr = (k&1) ? inner : half;
+            const x = Math.cos(a)*rr, y = Math.sin(a)*rr;
+            d += (k===0?'M':'L') + x.toFixed(2) + ' ' + y.toFixed(2) + ' ';
+          }
+          d += 'Z';
+          out.push(`<path ${t} d="${d}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
+          break;
+        }
+        case 'custom': {
+          const pts = S.customPts;
+          if(pts.length<2) break;
+          let d = '';
+          pts.forEach(([x,y],k)=>{
+            d += (k===0?'M':'L') + (x*SS).toFixed(2) + ' ' + (y*SS).toFixed(2) + ' ';
+          });
+          if(S.customClosed) d += 'Z';
+          out.push(`<path ${t} d="${d}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
+          break;
+        }
+        case 'square':
+        default: {
+          const r = clamp(corner*SS, 0, half);
+          out.push(`<rect ${t} x="${-half}" y="${-half}" width="${SS}" height="${SS}" rx="${r.toFixed(2)}" ry="${r.toFixed(2)}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
+          break;
+        }
+      }
+    }
+  }
+}
+
+// Scroll over a value box → step the value up/down
+document.querySelectorAll('aside input.v').forEach(el => {
+  el.addEventListener('wheel', e => {
+    e.preventDefault();
+    const step = parseFloat(el.step) || 1;
+    const mult = e.shiftKey ? 10 : 1;
+    const dir = e.deltaY > 0 ? -1 : 1;
+    const cur = parseFloat(el.value) || 0;
+    const min = parseFloat(el.min), max = parseFloat(el.max);
+    let next = cur + dir * step * mult;
+    if(!isNaN(min)) next = Math.max(min, next);
+    if(!isNaN(max)) next = Math.min(max, next);
+    const dec = (step.toString().split('.')[1] || '').length;
+    next = parseFloat(next.toFixed(dec));
+    el.value = next;
+    el.dispatchEvent(new Event('input', {bubbles:true}));
+    el.dispatchEvent(new Event('change', {bubbles:true}));
+  }, {passive:false});
+});
+
+// Capture undo history when a control is committed.
+// Arm on pointerdown/focus → push the pre-change snapshot on `change`.
+(function trackHistory(){
+  let armed = null;
+  const arm = () => { armed = snapshot(); };
+  document.querySelectorAll('aside input, aside select').forEach(el => {
+    el.addEventListener('pointerdown', arm);
+    el.addEventListener('focus', arm);
+    el.addEventListener('change', () => {
+      if(armed){
+        if(armed !== snapshot()) pushHistory(armed);
+        armed = null;
+      }
+    });
+  });
+})();
+
+resize();
+updateSelPill();
+renderAList();
+</script>
+</body>
+</html>
