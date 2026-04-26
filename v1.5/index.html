@@ -223,6 +223,7 @@
     <div class="row"><label>Pull</label>
       <input id="aPull" type="range" min="-1" max="1" value="0" step="0.01">
       <input class="v" id="aPullV" type="number" min="-1" max="1" step="0.01"></div>
+    <button id="resetMag" style="margin-top:-2px" title="Reset magnetic anchor to the geometry centroid">↻ reset magnet to centroid</button>
     <div class="row"><label>Curve</label>
       <input id="aCurve" type="range" min="0.3" max="4" value="1.7" step="0.05">
       <input class="v" id="aCurveV" type="number" min="0.3" max="4" step="0.05"></div>
@@ -424,16 +425,15 @@ function fields(x,y){
   if(S.muteAttractors) return out;
   for(const a of S.attractors){
     if(a.muted) continue;
-    let v, t, d, nx=0, ny=0;          // (nx,ny) = nearest attractor point in world coords
+    let v, t, d;
     if(a.type==='gradient'){
-      let gt, qx, qy;
-      [gt,qx,qy,d] = gradientProject(a, x, y);
+      let gt;
+      [gt,,,d] = gradientProject(a, x, y);
       if(d >= a.r) continue;
       let e = 1 - d/a.r;
       e = Math.pow(e, a.curve); e = smooth(e);
       v = a.strength * gt * e;
       t = e;                          // pull magnitude follows the radial falloff
-      nx = qx; ny = qy;
     } else if(a.type==='ellipse'){
       const flat = a._flat || (a._flat = flattenEllipse(a));
       d = nearestOnPoly(x, y, flat, true)[0];
@@ -441,30 +441,26 @@ function fields(x,y){
       t = 1 - d/a.r;
       t = Math.pow(t, a.curve); t = smooth(t);
       v = a.strength * t;
-      // Pull toward the ellipse center for an intuitive magnet feel
-      nx = a.x; ny = a.y;
     } else {
-      let qx, qy;
       if(a.type==='pen'){
         const flat = a._flat || (a._flat = flattenBezier(a.nodes, a.closed));
         if(flat.length<2) continue;
-        const hit = nearestOnPoly(x,y, flat, a.closed);
-        d = hit[0]; qx = hit[1]; qy = hit[2];
-      } else { d = Math.hypot(x-a.x, y-a.y); qx = a.x; qy = a.y; }
+        d = nearestOnPoly(x,y, flat, a.closed)[0];
+      } else d = Math.hypot(x-a.x, y-a.y);
       if(d >= a.r) continue;
       t = 1 - d/a.r;
       t = Math.pow(t, a.curve); t = smooth(t);
       v = a.strength * t;
-      nx = qx; ny = qy;
     }
     out[a.mode] += v;
     // Magnetic pull: cell shifts toward (positive) or away from (negative)
-    // the nearest attractor point. Cells closer to the attractor get pulled
-    // a larger fraction of their distance — they cluster into the center.
+    // the attractor's anchor point (default = geometry centroid, user-draggable).
+    // Closer cells get pulled a larger fraction of their distance.
     const pull = a.pull || 0;
     if(pull && t > 0){
-      out.px += (nx - x) * pull * t;
-      out.py += (ny - y) * pull * t;
+      const m = magPoint(a);
+      out.px += (m[0] - x) * pull * t;
+      out.py += (m[1] - y) * pull * t;
     }
   }
   out.scale = clamp(out.scale, -1, 1);
@@ -474,6 +470,27 @@ function fields(x,y){
 
 function invalidateFlat(a){ if(a && (a.type==='pen' || a.type==='ellipse')) delete a._flat; }
 function invalidateAllFlat(){ for(const a of S.attractors) invalidateFlat(a); }
+
+// ---------- magnetic-pull anchor ----------
+// Each attractor has an editable `mag` point (the magnetic anchor) that the
+// Pull effect draws cells toward. Default = centroid of the attractor's
+// geometry; user can drag it freely on the canvas.
+function attractorCentroid(a){
+  if(a.type==='pen' && a.nodes && a.nodes.length){
+    let sx=0, sy=0;
+    for(const nd of a.nodes){ sx+=nd.p[0]; sy+=nd.p[1]; }
+    return [sx/a.nodes.length, sy/a.nodes.length];
+  }
+  if(a.type==='gradient'){
+    return [(a.a[0]+a.b[0])/2, (a.a[1]+a.b[1])/2];
+  }
+  // point + ellipse share an explicit center
+  return [a.x, a.y];
+}
+function magPoint(a){
+  if(!a.mag){ a.mag = attractorCentroid(a); }
+  return a.mag;
+}
 
 // Axis-aligned world bounding box for pen / ellipse attractors.
 function attractorBBox(a){
@@ -789,6 +806,27 @@ function drawAttractors(){
       ctx.globalAlpha = 1;
       ctx.fillStyle = col;
       ctx.beginPath(); ctx.arc(a.x, a.y, 4/S.zoom, 0, TAU); ctx.fill();
+    }
+
+    // Magnetic-anchor handle (visible on the selected attractor only).
+    // White-filled ring + crosshair, in accent color, so it reads as a
+    // distinct draggable target from the regular geometry handles.
+    if(sel){
+      const m = magPoint(a);
+      const rOuter = 6/S.zoom, rInner = 3/S.zoom, arm = 8/S.zoom;
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1.25/S.zoom;
+      ctx.strokeStyle = '#7cf2c1';
+      ctx.fillStyle   = '#0d0e10';
+      ctx.beginPath(); ctx.arc(m[0], m[1], rOuter, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#7cf2c1';
+      ctx.beginPath(); ctx.arc(m[0], m[1], rInner, 0, TAU); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(m[0]-arm, m[1]); ctx.lineTo(m[0]-rOuter-1/S.zoom, m[1]);
+      ctx.moveTo(m[0]+rOuter+1/S.zoom, m[1]); ctx.lineTo(m[0]+arm, m[1]);
+      ctx.moveTo(m[0], m[1]-arm); ctx.lineTo(m[0], m[1]-rOuter-1/S.zoom);
+      ctx.moveTo(m[0], m[1]+rOuter+1/S.zoom); ctx.lineTo(m[0], m[1]+arm);
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -1108,6 +1146,14 @@ $('clearA').addEventListener('click', () => {
   S.attractors = []; S.selected = -1; cancelDraft(); updateSelPill(); renderAList(); draw();
 });
 $('closePath').addEventListener('click', () => commitDraft(true));
+$('resetMag').addEventListener('click', () => {
+  if(S.selected<0) return;
+  const a = S.attractors[S.selected];
+  if(!a) return;
+  pushHistory();
+  a.mag = attractorCentroid(a);
+  draw();
+});
 
 function updateSelPill(){
   const p = $('selPill');
@@ -1200,6 +1246,7 @@ function offsetAttractor(a, dx, dy){
     a.x += dx; a.y += dy;
     if(a.type==='ellipse') invalidateFlat(a);
   }
+  if(a.mag){ a.mag[0]+=dx; a.mag[1]+=dy; }
 }
 
 function duplicateAttractor(i, dxWorld, dyWorld){
@@ -1248,10 +1295,12 @@ function cancelDraft(){ S.draft = null; draw(); }
 function commitDraft(closed){
   if(!S.draft || S.draft.nodes.length<2){ S.draft = null; draw(); return; }
   pushHistory();
-  S.attractors.push({
+  const newPen = {
     type:'pen', nodes:S.draft.nodes, r:S.aFalloff, pull:S.aPull||0, closed:!!closed,
     mode:S.aMode, strength:S.aStrength, curve:S.aCurve
-  });
+  };
+  newPen.mag = attractorCentroid(newPen);
+  S.attractors.push(newPen);
   S.draft = null;
   selectAttractor(S.attractors.length-1);
   draw();
@@ -1269,6 +1318,14 @@ let panStart = null;
 //   gradient: 0 = A, 1 = B
 function pickAttractor(wx, wy, tolPx){
   const tol = tolPx / S.zoom;
+  // Mag handle on the selected attractor wins over everything else (it's
+  // drawn on top and is the smallest target — easy to lose otherwise).
+  if(S.selected>=0 && S.attractors[S.selected]){
+    const selA = S.attractors[S.selected];
+    const m = magPoint(selA);
+    const dM = Math.hypot(m[0]-wx, m[1]-wy);
+    if(dM < tol) return {i:S.selected, vertex:'mag'};
+  }
   let hitI=-1, hitV=-1, bd=tol;
   for(let i=0;i<S.attractors.length;i++){
     const a = S.attractors[i];
@@ -1472,6 +1529,21 @@ cnv.addEventListener('mousedown', e => {
     }
   }
 
+  // Magnetic anchor on the selected attractor wins over every tool.
+  // pickAttractor already returns vertex:'mag' as the highest-priority hit,
+  // but we re-check explicitly so the pen tool's special branches don't swallow it.
+  if(S.selected>=0 && S.attractors[S.selected]){
+    const selA = S.attractors[S.selected];
+    const m = magPoint(selA);
+    const dM = Math.hypot(m[0]-wx, m[1]-wy);
+    if(dM * S.zoom < 12){
+      pushHistory();
+      drag = { i: S.selected, vertex: 'mag', lastX: wx, lastY: wy };
+      draw();
+      return;
+    }
+  }
+
   if(S.tool==='pen'){
     // 0) Alt+click on existing pen path → duplicate & drag the clone
     if(e.altKey && !S.draft){
@@ -1537,7 +1609,7 @@ cnv.addEventListener('mousedown', e => {
       drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
     } else {
       S.attractors.push({ type:'gradient', a:[wx,wy], b:[wx,wy], r:S.aFalloff, pull:S.aPull||0,
-        mode:S.aMode, strength:S.aStrength, curve:S.aCurve });
+        mode:S.aMode, strength:S.aStrength, curve:S.aCurve, mag:[wx,wy] });
       const i = S.attractors.length-1;
       selectAttractor(i);
       drag = { i, vertex:1, lastX:wx, lastY:wy };
@@ -1555,7 +1627,8 @@ cnv.addEventListener('mousedown', e => {
     } else {
       S.attractors.push({
         type:'ellipse', x:wx, y:wy, rx:1, ry:1, rot:0,
-        r:S.aFalloff, pull:S.aPull||0, mode:S.aMode, strength:S.aStrength, curve:S.aCurve
+        r:S.aFalloff, pull:S.aPull||0, mode:S.aMode, strength:S.aStrength, curve:S.aCurve,
+        mag:[wx,wy]
       });
       const i = S.attractors.length-1;
       selectAttractor(i);
@@ -1573,7 +1646,7 @@ cnv.addEventListener('mousedown', e => {
     drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
   } else {
     S.attractors.push({ type:'point', x:wx, y:wy, r:S.aFalloff, pull:S.aPull||0,
-      mode:S.aMode, strength:S.aStrength, curve:S.aCurve });
+      mode:S.aMode, strength:S.aStrength, curve:S.aCurve, mag:[wx,wy] });
     selectAttractor(S.attractors.length-1);
     drag = { i:S.attractors.length-1, vertex:-1, lastX:wx, lastY:wy };
   }
@@ -1615,6 +1688,14 @@ addEventListener('mousemove', e => {
   if(drag==null) return;
   const a = S.attractors[drag.i];
 
+  // Magnetic-anchor drag (independent of geometry)
+  if(drag.vertex === 'mag'){
+    a.mag = [wx, wy];
+    drag.lastX = wx; drag.lastY = wy;
+    draw();
+    return;
+  }
+
   // Free-transform scale drag
   if(drag.vertex === 'scale'){
     const px = drag.pivot[0], py = drag.pivot[1];
@@ -1641,6 +1722,10 @@ addEventListener('mousemove', e => {
       a.rx = Math.max(1, src.rx * k);
       a.ry = Math.max(1, src.ry * k);
     }
+    if(src.mag && a.mag){
+      a.mag[0] = px + (src.mag[0]-px)*kx;
+      a.mag[1] = py + (src.mag[1]-py)*ky;
+    }
     invalidateFlat(a);
     draw();
     return;
@@ -1665,6 +1750,7 @@ addEventListener('mousemove', e => {
     } else {
       const dx = wx - drag.lastX, dy = wy - drag.lastY;
       for(const nd of a.nodes){ nd.p[0]+=dx; nd.p[1]+=dy; }
+      if(a.mag){ a.mag[0]+=dx; a.mag[1]+=dy; }
     }
     invalidateFlat(a);
   } else if(a.type==='ellipse'){
@@ -1677,6 +1763,7 @@ addEventListener('mousemove', e => {
     } else if(v===0 || v===-1){
       const dx = wx - drag.lastX, dy = wy - drag.lastY;
       a.x += dx; a.y += dy;
+      if(a.mag){ a.mag[0]+=dx; a.mag[1]+=dy; }
     } else if(v===1){
       const dx = wx - a.x, dy = wy - a.y;
       const L = Math.hypot(dx,dy) || 1;
@@ -1696,8 +1783,13 @@ addEventListener('mousemove', e => {
     else {
       const dx = wx - drag.lastX, dy = wy - drag.lastY;
       a.a[0]+=dx; a.a[1]+=dy; a.b[0]+=dx; a.b[1]+=dy;
+      if(a.mag){ a.mag[0]+=dx; a.mag[1]+=dy; }
     }
-  } else { a.x = wx; a.y = wy; }
+  } else {
+    const dx = wx - a.x, dy = wy - a.y;
+    a.x = wx; a.y = wy;
+    if(a.mag){ a.mag[0]+=dx; a.mag[1]+=dy; }
+  }
   drag.lastX = wx; drag.lastY = wy;
   draw();
 });
@@ -1714,7 +1806,8 @@ function updateHoverCursor(){
   if(S.spaceDown){ cnv.style.cursor = 'grab'; return; }
   if(S.tool === 'pen'){ updatePenCursor(); return; }
   const hit = pickAttractor(S.mouseW[0], S.mouseW[1], 12);
-  cnv.style.cursor = hit ? 'pointer' : 'crosshair';
+  if(hit && hit.vertex === 'mag') cnv.style.cursor = 'move';
+  else cnv.style.cursor = hit ? 'pointer' : 'crosshair';
 }
 
 addEventListener('mouseup', () => {

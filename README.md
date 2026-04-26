@@ -7,7 +7,7 @@ No build step. Open the `index.html` file in any modern browser.
 ## Versions
 
 - **[v1/](v1/index.html)** — initial release. Per-attractor radius, curve, strength, mode (scale / hole).
-- **[v1.5/](v1.5/index.html)** — adds a per-attractor **Pull** control (magnetic displacement): cells inside the attractor's radius get visually shifted toward (or away from) the attractor center. Closer cells get pulled harder, producing a clustering / magnet effect. Also: hover cursor changes to a pointer over attractors, and Delete / Backspace removes the selected attractor.
+- **[v1.5/](v1.5/index.html)** — adds a per-attractor **Pull** control (magnetic displacement) plus a **draggable magnetic anchor** for each attractor: cells inside the attractor's radius get visually shifted toward (or away from) the anchor. The anchor defaults to the geometry centroid (point itself for Point, center for Ellipse, midpoint for Gradient, average of nodes for Pen) and is movable independently. A reset button restores it to the centroid. Closer cells get pulled harder, producing a clustering / magnet effect. Also: hover cursor changes to a pointer over attractors, and Delete / Backspace removes the selected attractor.
 
 ## Attractor controls (v1.5)
 
@@ -27,3 +27,4 @@ No build step. Open the `index.html` file in any modern browser.
 - **Wheel** zooms; **space+drag** pans.
 - **Ctrl+Z** / **Ctrl+Shift+Z** undo/redo.
 - Hover an attractor (Point / Ellipse / Gradient tools) and the cursor turns into a pointer to indicate it is selectable.
+- When an attractor is selected, its **magnetic anchor** (small ringed dot with crosshair) appears at the geometry centroid. Drag to reposition. Click the **↻ reset magnet to centroid** button in the right panel to restore it.
