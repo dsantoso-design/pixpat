@@ -109,19 +109,8 @@
       <option value="diamond">Diamond</option>
       <option value="cross">Cross / plus</option>
       <option value="dot" selected>Centered dot</option>
-      <option value="star">Star</option>
       <option value="custom">Custom…</option>
     </select>
-
-    <!-- Star params -->
-    <div id="starBox" style="display:none">
-      <div class="row" style="margin-top:6px"><label>Points</label>
-        <input id="starN" type="range" min="3" max="12" value="5" step="1">
-        <input class="v" id="starNV" type="number" min="3" max="12" step="1"></div>
-      <div class="row"><label>Inner</label>
-        <input id="starInner" type="range" min="0.1" max="0.9" value="0.45" step="0.01">
-        <input class="v" id="starInnerV" type="number" min="0.1" max="0.9" step="0.01"></div>
-    </div>
 
     <!-- Custom shape editor -->
     <div id="customBox" style="display:none;margin-top:6px">
@@ -184,6 +173,16 @@
     <button id="resetView">Reset zoom &amp; pan</button>
 
     <h2>Export</h2>
+    <div class="row" style="margin-bottom:6px"><label>PNG resolution</label>
+      <select id="pngScale" style="grid-column: span 2; width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font:inherit">
+        <option value="1">1× (screen)</option>
+        <option value="2" selected>2×</option>
+        <option value="3">3×</option>
+        <option value="4">4×</option>
+        <option value="6">6×</option>
+        <option value="8">8×</option>
+      </select>
+    </div>
     <div class="seg two">
       <button id="png">PNG</button>
       <button id="svg">SVG</button>
@@ -271,7 +270,6 @@ function mixHex(a,b,t){
 
 const S = {
   shape:'dot', tileType:'regular',
-  starN:5, starInner:0.45,
   customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
   size:42, scale:0.23, corner:50, jitter:0, stroke:0,
   attractors:[], selected:-1,
@@ -285,12 +283,12 @@ const S = {
   history:[], redo:[], lastWheelPushAt:0,
 };
 
-const SNAP_KEYS = ['shape','tileType','starN','starInner','customPts','customClosed','customAngle',
+const SNAP_KEYS = ['shape','tileType','customPts','customClosed','customAngle',
   'size','scale','corner','jitter','stroke',
   'bg','fg','fill','attractors','selected'];
 const UI_CONTROLS = {
   shape:'shape', tileType:'tileType',
-  starN:'starN', starInner:'starInner', customAngle:'customAngle',
+  customAngle:'customAngle',
   size:'size', scale:'scale', corner:'corner', jitter:'jitter', stroke:'stroke',
   bg:'bg', fg:'fg', fill:'fill',
 };
@@ -327,7 +325,7 @@ function applySnapshot(json){
 function undo(){ if(!S.history.length) return; S.redo.push(snapshot()); applySnapshot(S.history.pop()); }
 function redoFn(){ if(!S.redo.length) return; S.history.push(snapshot()); applySnapshot(S.redo.pop()); }
 
-const cnv = $('c'); const ctx = cnv.getContext('2d');
+const cnv = $('c'); let ctx = cnv.getContext('2d');
 
 let _centered = false;
 function resize(){
@@ -521,6 +519,59 @@ function bboxCorners(bb){
   return [[bb.x0,bb.y0],[bb.x1,bb.y0],[bb.x1,bb.y1],[bb.x0,bb.y1]];
 }
 
+// Build an SVG path-data string for a closed polygon with rounded corners.
+// `sub` is a list of [x,y] points in unit-cell space (range ~[-0.5, 0.5]),
+// `SS` scales them to pixel size, `cr` is the corner radius in pixels.
+// Each corner is replaced by a circular arc tangent to both adjacent edges,
+// using the SVG `A` command. Mirrors what canvas's arcTo does so the PNG
+// and SVG outputs look the same.
+function roundedSubpathSVG(sub, SS, cr){
+  const n = sub.length;
+  const P = sub.map(p => [p[0]*SS, p[1]*SS]);
+  let d = '';
+  for(let i=0;i<n;i++){
+    const prev = P[(i-1+n)%n], cur = P[i], next = P[(i+1)%n];
+    const v1x = prev[0]-cur[0], v1y = prev[1]-cur[1];
+    const v2x = next[0]-cur[0], v2y = next[1]-cur[1];
+    const l1 = Math.hypot(v1x, v1y) || 1;
+    const l2 = Math.hypot(v2x, v2y) || 1;
+    const u1x = v1x/l1, u1y = v1y/l1;
+    const u2x = v2x/l2, u2y = v2y/l2;
+    const dot = clamp(u1x*u2x + u1y*u2y, -1, 1);
+    const ang = Math.acos(dot);                  // interior corner angle
+    const tanHalf = Math.tan(ang/2) || 1e-6;
+    // Distance from the corner along each adjacent edge to the tangent point.
+    // Clamp so the rounded corner can't eat more than half of either edge.
+    const t = Math.min(cr / tanHalf, l1/2, l2/2);
+    const er = t * tanHalf;                      // effective radius after clamp
+    const p1x = cur[0] + u1x*t, p1y = cur[1] + u1y*t;   // arc entry point
+    const p2x = cur[0] + u2x*t, p2y = cur[1] + u2y*t;   // arc exit point
+    if(i===0) d += 'M' + p1x.toFixed(2) + ' ' + p1y.toFixed(2);
+    else      d += ' L' + p1x.toFixed(2) + ' ' + p1y.toFixed(2);
+    // sweep flag: SVG y is down, so a clockwise turn (negative cross) → sweep=0
+    const cross = u1x*u2y - u1y*u2x;
+    const sweep = cross < 0 ? 0 : 1;
+    d += ' A' + er.toFixed(2) + ' ' + er.toFixed(2) + ' 0 0 ' + sweep + ' ' +
+         p2x.toFixed(2) + ' ' + p2y.toFixed(2);
+  }
+  return d + ' Z';
+}
+
+// Split a customPts array (which may contain null markers) into a list of
+// sub-paths, dropping the null separators. Used by both the canvas renderer
+// and the SVG exporter so they produce identical multi-polygon output.
+function splitNullSubpaths(pts){
+  const out = []; let cur = [];
+  for(const p of pts){
+    if(p === null){
+      if(cur.length) out.push(cur);
+      cur = [];
+    } else cur.push(p);
+  }
+  if(cur.length) out.push(cur);
+  return out;
+}
+
 // ---------- pixel grid draw ----------
 function cellShape(ctx, cx, cy, s, rot, corner, shape){
   ctx.save();
@@ -549,34 +600,35 @@ function cellShape(ctx, cx, cy, s, rot, corner, shape){
     case 'dot':
       ctx.arc(0,0, half*0.45, 0, TAU);
       break;
-    case 'star': {
-      const N = S.starN, inner = S.starInner * half;
-      for(let k=0;k<N*2;k++){
-        const a = -Math.PI/2 + k*Math.PI/N;
-        const rr = (k&1) ? inner : half;
-        const x = Math.cos(a)*rr, y = Math.sin(a)*rr;
-        if(k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-      }
-      ctx.closePath();
-      break;
-    }
     case 'custom': {
       const pts = S.customPts;
       if(pts.length<2){ ctx.restore(); return; }
       // null entries mark a moveTo, so a single customPts can describe
       // multiple disjoint sub-shapes (e.g. two triangles).
-      let started = false;
-      for(let k=0;k<pts.length;k++){
-        const p = pts[k];
-        if(p === null){
-          if(started && S.customClosed) ctx.closePath();
-          started = false; continue;
+      const subs = splitNullSubpaths(pts);
+      const cr = clamp(corner, 0, half);   // pixel radius for rounded corners
+      for(const sub of subs){
+        if(sub.length < 2) continue;
+        if(cr <= 0.5 || sub.length < 3 || !S.customClosed){
+          // sharp polyline — no rounding
+          for(let k=0;k<sub.length;k++){
+            const x = sub[k][0]*s, y = sub[k][1]*s;
+            if(k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+          }
+          if(S.customClosed) ctx.closePath();
+        } else {
+          // rounded corners via arcTo: start on the midpoint of the last
+          // edge so the first arcTo has a tangent direction to use.
+          const n = sub.length;
+          const last = sub[n-1], first = sub[0];
+          ctx.moveTo(((last[0]+first[0])/2)*s, ((last[1]+first[1])/2)*s);
+          for(let k=0;k<n;k++){
+            const cur = sub[k], nxt = sub[(k+1)%n];
+            ctx.arcTo(cur[0]*s, cur[1]*s, nxt[0]*s, nxt[1]*s, cr);
+          }
+          ctx.closePath();
         }
-        const x = p[0]*s, y = p[1]*s;
-        if(!started){ ctx.moveTo(x,y); started = true; }
-        else ctx.lineTo(x,y);
       }
-      if(started && S.customClosed) ctx.closePath();
       break;
     }
     case 'square':
@@ -957,13 +1009,11 @@ bindRange('aCurve','aCurve', v=>v.toFixed(2), v=>{
 });
 
 $('shape').addEventListener('change', e => { S.shape = e.target.value; syncShapeUI(); draw(); });
-bindRange('starN','starN', v=>v.toFixed(0));
-bindRange('starInner','starInner', v=>v.toFixed(2));
 
 function syncShapeUI(){
-  $('starBox').style.display   = S.shape==='star'   ? 'block' : 'none';
   $('customBox').style.display = S.shape==='custom' ? 'block' : 'none';
-  $('cornerRow').style.display = S.shape==='square' ? '' : 'none';
+  // Rounded-corner control applies to square cells AND custom polygons
+  $('cornerRow').style.display = (S.shape==='square' || S.shape==='custom') ? '' : 'none';
   if(S.shape==='custom') drawEditor();
 }
 syncShapeUI();
@@ -1976,10 +2026,44 @@ function pickTool(t){
 }
 
 // ---------- export ----------
+// Render the current scene at a given resolution multiplier into an
+// offscreen canvas and return a PNG data-url. Temporarily swaps the global
+// `ctx` and `S.dpr` so existing draw functions render straight into the
+// offscreen target — no parallel render pipeline to maintain.
+function renderPNG(scale){
+  scale = scale || 1;
+  if(scale === 1){
+    // Fast path: the on-screen canvas already holds what we want.
+    return cnv.toDataURL('image/png');
+  }
+  const off = document.createElement('canvas');
+  off.width  = Math.round(S.w * S.dpr * scale);
+  off.height = Math.round(S.h * S.dpr * scale);
+  const offCtx = off.getContext('2d');
+
+  const origCtx = ctx;
+  const origDpr = S.dpr;
+  const origHide = S.hideAttractors;
+
+  ctx = offCtx;
+  S.dpr = origDpr * scale;
+  S.hideAttractors = true;          // never bake handles into the export
+  try {
+    draw();
+    return off.toDataURL('image/png');
+  } finally {
+    ctx = origCtx;
+    S.dpr = origDpr;
+    S.hideAttractors = origHide;
+    draw();                          // restore the on-screen render
+  }
+}
 $('png').addEventListener('click', () => {
+  const scale = parseInt($('pngScale').value, 10) || 1;
   const link = document.createElement('a');
-  link.download = `pixpat_${S.shape}_${Date.now()}.png`;
-  link.href = cnv.toDataURL('image/png');
+  const tag = scale === 1 ? '' : `_${scale}x`;
+  link.download = `pixpat_${S.shape}${tag}_${Date.now()}.png`;
+  link.href = renderPNG(scale);
   link.click();
 });
 
@@ -2056,34 +2140,25 @@ function renderSVGGrid(out){
         case 'dot':
           out.push(`<circle ${t} r="${(half*0.45).toFixed(2)}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
           break;
-        case 'star': {
-          const N = S.starN, inner = S.starInner * half;
-          let d = '';
-          for(let k=0;k<N*2;k++){
-            const a = -Math.PI/2 + k*Math.PI/N;
-            const rr = (k&1) ? inner : half;
-            const x = Math.cos(a)*rr, y = Math.sin(a)*rr;
-            d += (k===0?'M':'L') + x.toFixed(2) + ' ' + y.toFixed(2) + ' ';
-          }
-          d += 'Z';
-          out.push(`<path ${t} d="${d}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
-          break;
-        }
         case 'custom': {
           const pts = S.customPts;
           if(pts.length<2) break;
-          let d = '', started = false;
-          pts.forEach(p => {
-            if(p === null){
-              if(started && S.customClosed) d += 'Z ';
-              started = false; return;
+          const subs = splitNullSubpaths(pts);
+          const cr = clamp(corner*SS, 0, half);
+          let d = '';
+          for(const sub of subs){
+            if(sub.length < 2) continue;
+            if(cr <= 0.5 || sub.length < 3 || !S.customClosed){
+              for(let k=0;k<sub.length;k++){
+                const cmd = k===0 ? 'M' : 'L';
+                d += cmd + (sub[k][0]*SS).toFixed(2) + ' ' + (sub[k][1]*SS).toFixed(2) + ' ';
+              }
+              if(S.customClosed) d += 'Z ';
+            } else {
+              d += roundedSubpathSVG(sub, SS, cr) + ' ';
             }
-            const cmd = started ? 'L' : 'M';
-            d += cmd + (p[0]*SS).toFixed(2) + ' ' + (p[1]*SS).toFixed(2) + ' ';
-            started = true;
-          });
-          if(started && S.customClosed) d += 'Z';
-          out.push(`<path ${t} d="${d}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
+          }
+          out.push(`<path ${t} d="${d.trim()}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
           break;
         }
         case 'square':
