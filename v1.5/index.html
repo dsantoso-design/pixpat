@@ -141,6 +141,9 @@
       <option value="brick-row">Brick by row</option>
       <option value="brick-col">Brick by column</option>
     </select>
+    <div class="row" style="margin-top:6px"><label>Vert. offset</label>
+      <input id="tileOffsetY" type="range" min="-1" max="1" value="0" step="0.01">
+      <input class="v" id="tileOffsetYV" type="number" min="-1" max="1" step="0.01"></div>
 
     <h2>Geometry</h2>
     <div class="row"><label>Scale</label>
@@ -270,7 +273,7 @@ function mixHex(a,b,t){
 }
 
 const S = {
-  shape:'dot', tileType:'regular',
+  shape:'dot', tileType:'regular', tileOffsetY:0,
   customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
   size:42, scale:0.23, corner:50, jitter:0, stroke:0,
   attractors:[], selected:-1,
@@ -284,11 +287,11 @@ const S = {
   history:[], redo:[], lastWheelPushAt:0,
 };
 
-const SNAP_KEYS = ['shape','tileType','customPts','customClosed','customAngle',
+const SNAP_KEYS = ['shape','tileType','tileOffsetY','customPts','customClosed','customAngle',
   'size','scale','corner','jitter','stroke',
   'bg','fg','fill','attractors','selected'];
 const UI_CONTROLS = {
-  shape:'shape', tileType:'tileType',
+  shape:'shape', tileType:'tileType', tileOffsetY:'tileOffsetY',
   customAngle:'customAngle',
   size:'size', scale:'scale', corner:'corner', jitter:'jitter', stroke:'stroke',
   bg:'bg', fg:'fg', fill:'fill',
@@ -522,14 +525,12 @@ function bboxCorners(bb){
 }
 
 // Build an SVG path-data string for a closed polygon with rounded corners.
-// `sub` is a list of [x,y] points in unit-cell space (range ~[-0.5, 0.5]),
-// `SS` scales them to pixel size, `cr` is the corner radius in pixels.
-// Each corner is replaced by a circular arc tangent to both adjacent edges,
-// using the SVG `A` command. Mirrors what canvas's arcTo does so the PNG
-// and SVG outputs look the same.
-function roundedSubpathSVG(sub, SS, cr){
-  const n = sub.length;
-  const P = sub.map(p => [p[0]*SS, p[1]*SS]);
+// `P` is points already in pixel coords. `cr` is the corner radius (px).
+// Each corner is replaced by a circular arc tangent to both adjacent edges
+// using SVG's A command. Per-corner radius is auto-clamped so it can never
+// exceed half the shorter adjacent edge — the shape can't fold over itself.
+function roundedPolygonSVG(P, cr){
+  const n = P.length;
   let d = '';
   for(let i=0;i<n;i++){
     const prev = P[(i-1+n)%n], cur = P[i], next = P[(i+1)%n];
@@ -558,6 +559,33 @@ function roundedSubpathSVG(sub, SS, cr){
   }
   return d + ' Z';
 }
+// Convenience used by the custom-shape renderer: scales unit-cell points by SS first.
+function roundedSubpathSVG(sub, SS, cr){
+  return roundedPolygonSVG(sub.map(p => [p[0]*SS, p[1]*SS]), cr);
+}
+
+// Stroke (and fill) a closed rounded polygon onto a canvas context.
+// Uses ctx.arcTo, which auto-clamps the corner radius to fit each pair of
+// adjacent edges — the corner never overshoots into the opposite side.
+// Falls back to sharp lines when the requested radius is effectively zero.
+function strokePolyRounded(ctx, pts, cr){
+  const n = pts.length;
+  if(n < 2) return;
+  if(cr <= 0.5 || n < 3){
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for(let k=1;k<n;k++) ctx.lineTo(pts[k][0], pts[k][1]);
+    ctx.closePath();
+    return;
+  }
+  // Start mid-edge so the first arcTo has a valid tangent direction.
+  const last = pts[n-1], first = pts[0];
+  ctx.moveTo((last[0]+first[0])/2, (last[1]+first[1])/2);
+  for(let k=0;k<n;k++){
+    const cur = pts[k], nxt = pts[(k+1)%n];
+    ctx.arcTo(cur[0], cur[1], nxt[0], nxt[1], cr);
+  }
+  ctx.closePath();
+}
 
 // Split a customPts array (which may contain null markers) into a list of
 // sub-paths, dropping the null separators. Used by both the canvas renderer
@@ -585,18 +613,19 @@ function cellShape(ctx, cx, cy, s, rot, corner, shape){
     case 'circle':
       ctx.arc(0,0, half, 0, TAU);
       break;
-    case 'diamond':
-      ctx.moveTo(0,-half); ctx.lineTo(half,0); ctx.lineTo(0,half); ctx.lineTo(-half,0);
-      ctx.closePath();
+    case 'diamond': {
+      const pts = [[0,-half],[half,0],[0,half],[-half,0]];
+      strokePolyRounded(ctx, pts, corner);
       break;
+    }
     case 'cross': {
-      const t = s * (0.32);
-      const h = half, ht = t/2;
-      ctx.moveTo(-ht,-h); ctx.lineTo(ht,-h); ctx.lineTo(ht,-ht);
-      ctx.lineTo(h,-ht);  ctx.lineTo(h,ht);  ctx.lineTo(ht,ht);
-      ctx.lineTo(ht,h);   ctx.lineTo(-ht,h); ctx.lineTo(-ht,ht);
-      ctx.lineTo(-h,ht);  ctx.lineTo(-h,-ht);ctx.lineTo(-ht,-ht);
-      ctx.closePath();
+      const tw = s * 0.32;        // arm width
+      const h = half, ht = tw/2;
+      const pts = [
+        [-ht,-h],[ht,-h],[ht,-ht],[h,-ht],[h,ht],[ht,ht],
+        [ht,h],[-ht,h],[-ht,ht],[-h,ht],[-h,-ht],[-ht,-ht]
+      ];
+      strokePolyRounded(ctx, pts, corner);
       break;
     }
     case 'dot':
@@ -667,6 +696,9 @@ function drawGrid(){
       let cx = i*s + s/2, cy = j*s + s/2;
       if(S.tileType==='brick-row' && (j&1)) cx += s/2;
       if(S.tileType==='brick-col' && (i&1)) cy += s/2;
+      // Independent vertical stagger: every other column shifts by this fraction
+      // of a cell (-1..1). Stacks on top of brick-col when both are active.
+      if(S.tileOffsetY && (i&1)) cy += S.tileOffsetY * s;
 
       const rng = mulberry32(((i*374761393)^(j*668265263)) >>> 0);
       const f = fields(cx,cy);
@@ -991,6 +1023,7 @@ bindRange('scale','scale', v=>v.toFixed(2));
 bindRange('corner','corner', v=>v.toFixed(0));
 bindRange('jitter','jitter', v=>v.toFixed(2));
 bindRange('stroke','stroke', v=>v.toFixed(1));
+bindRange('tileOffsetY','tileOffsetY', v=>v.toFixed(2));
 bindRange('aStrength','aStrength', v=>v.toFixed(2), v=>{
   if(S.selected>=0 && S.attractors[S.selected]){
     S.attractors[S.selected].strength = v;
@@ -1019,8 +1052,8 @@ $('shape').addEventListener('change', e => { S.shape = e.target.value; syncShape
 
 function syncShapeUI(){
   $('customBox').style.display = S.shape==='custom' ? 'block' : 'none';
-  // Rounded-corner control applies to square cells AND custom polygons
-  $('cornerRow').style.display = (S.shape==='square' || S.shape==='custom') ? '' : 'none';
+  // Round-corner applies to every shape with corners — circle/dot ignore it.
+  $('cornerRow').style.display = '';
   if(S.shape==='custom') drawEditor();
 }
 syncShapeUI();
@@ -2103,6 +2136,9 @@ function renderSVGGrid(out){
       let cx = i*s + s/2, cy = j*s + s/2;
       if(S.tileType==='brick-row' && (j&1)) cx += s/2;
       if(S.tileType==='brick-col' && (i&1)) cy += s/2;
+      // Independent vertical stagger: every other column shifts by this fraction
+      // of a cell (-1..1). Stacks on top of brick-col when both are active.
+      if(S.tileOffsetY && (i&1)) cy += S.tileOffsetY * s;
 
       const rng = mulberry32(((i*374761393)^(j*668265263)) >>> 0);
       const f = fields(cx,cy);
@@ -2136,13 +2172,23 @@ function renderSVGGrid(out){
           out.push(`<circle ${t} r="${half.toFixed(2)}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
           break;
         case 'diamond': {
-          const d = `M0 ${-half} L${half} 0 L0 ${half} L${-half} 0 Z`;
+          const cr = corner * SS;
+          const P = [[0,-half],[half,0],[0,half],[-half,0]];
+          const d = cr > 0.5 ? roundedPolygonSVG(P, cr)
+                             : `M0 ${-half} L${half} 0 L0 ${half} L${-half} 0 Z`;
           out.push(`<path ${t} d="${d}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
           break;
         }
         case 'cross': {
           const tt = SS*0.32, h=half, ht=tt/2;
-          const d = `M${-ht} ${-h} L${ht} ${-h} L${ht} ${-ht} L${h} ${-ht} L${h} ${ht} L${ht} ${ht} L${ht} ${h} L${-ht} ${h} L${-ht} ${ht} L${-h} ${ht} L${-h} ${-ht} L${-ht} ${-ht} Z`;
+          const cr = corner * SS;
+          const P = [
+            [-ht,-h],[ht,-h],[ht,-ht],[h,-ht],[h,ht],[ht,ht],
+            [ht,h],[-ht,h],[-ht,ht],[-h,ht],[-h,-ht],[-ht,-ht]
+          ];
+          const d = cr > 0.5
+            ? roundedPolygonSVG(P, cr)
+            : `M${-ht} ${-h} L${ht} ${-h} L${ht} ${-ht} L${h} ${-ht} L${h} ${ht} L${ht} ${ht} L${ht} ${h} L${-ht} ${h} L${-ht} ${ht} L${-h} ${ht} L${-h} ${-ht} L${-ht} ${-ht} Z`;
           out.push(`<path ${t} d="${d}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
           break;
         }
