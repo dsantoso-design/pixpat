@@ -1139,11 +1139,13 @@ bindRange('aCurve','aCurve', v=>v.toFixed(2), v=>{
 function syncShapeUI(){
   // Editor stays visible for every shape now; this hook just exists so
   // applySnapshot/applyPresetState can call it to refresh the icon highlight
-  // and editor preview after a state load.
+  // and editor preview after a state load. Both helpers live further down
+  // in the script (TDZ for the editor's `sEd` const), so this function is
+  // only safe to call AFTER the custom-shape-editor section has executed.
   if(typeof syncShapeIcon === 'function') syncShapeIcon();
   if(typeof drawEditor === 'function') drawEditor();
 }
-syncShapeUI();
+// (No early call here — the editor's sEd const isn't initialized yet.)
 
 // ---------- presets ----------
 // What gets captured in a preset: everything the user chose visually except
