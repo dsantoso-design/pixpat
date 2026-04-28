@@ -94,6 +94,11 @@
   .pill{display:inline-block;padding:1px 6px;border:1px solid var(--line);
     border-radius:10px;color:var(--muted);font-size:10px;margin-left:6px}
   .pill.on{color:var(--accent);border-color:var(--accent)}
+  .row button.reset{width:20px;height:20px;flex:0 0 20px;margin:0;padding:0;
+    font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center;
+    background:transparent;border:1px solid transparent;color:var(--muted);
+    border-radius:4px;cursor:pointer}
+  .row button.reset:hover{border-color:var(--accent);color:var(--accent)}
 </style>
 </head>
 <body>
@@ -141,7 +146,10 @@
       <option value="brick-row">Brick by row</option>
       <option value="brick-col">Brick by column</option>
     </select>
-    <div class="row" style="margin-top:6px"><label>Vert. offset</label>
+    <div class="row" style="margin-top:6px"><label>Horiz. offset</label>
+      <input id="tileOffsetX" type="range" min="-1" max="1" value="0" step="0.01">
+      <input class="v" id="tileOffsetXV" type="number" min="-1" max="1" step="0.01"></div>
+    <div class="row"><label>Vert. offset</label>
       <input id="tileOffsetY" type="range" min="-1" max="1" value="0" step="0.01">
       <input class="v" id="tileOffsetYV" type="number" min="-1" max="1" step="0.01"></div>
 
@@ -169,6 +177,17 @@
       <input id="fg" type="color" value="#0d0e10">
     </div>
     <label class="chk" style="margin-top:8px"><input id="fill" type="checkbox" checked> fill cells</label>
+
+    <h2>Reference image</h2>
+    <input id="imgFile" type="file" accept="image/*"
+      style="width:100%;font-size:11px;color:var(--muted);background:var(--panel2);
+        border:1px solid var(--line);border-radius:6px;padding:4px 6px;cursor:pointer">
+    <div class="row" style="margin-top:6px"><label>Opacity</label>
+      <input id="imgOpacity" type="range" min="0" max="1" value="0.5" step="0.01">
+      <input class="v" id="imgOpacityV" type="number" min="0" max="1" step="0.01"></div>
+    <label class="chk" style="margin-bottom:4px"><input id="imgVisible" type="checkbox" checked> visible</label>
+    <label class="chk" style="margin-bottom:4px"><input id="imgLocked" type="checkbox" checked> locked (uncheck to drag)</label>
+    <button id="imgRemove" class="danger">Remove image</button>
 
     <h2>View</h2>
     <label class="chk" style="margin-bottom:6px"><input id="mute" type="checkbox"> mute attractors</label>
@@ -273,7 +292,7 @@ function mixHex(a,b,t){
 }
 
 const S = {
-  shape:'dot', tileType:'regular', tileOffsetY:0,
+  shape:'dot', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
   customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
   size:42, scale:0.23, corner:50, jitter:0, stroke:0,
   attractors:[], selected:-1,
@@ -285,13 +304,17 @@ const S = {
   w:0, h:0, dpr:Math.min(2, devicePixelRatio||1),
   spaceDown:false,
   history:[], redo:[], lastWheelPushAt:0,
+  // Reference image (drawn above the pixel grid). Lives outside the snapshot
+  // pipeline since the loaded image element + binary data don't belong in
+  // undo history; only its on/off + transform are user-facing controls.
+  image:{ el:null, x:0, y:0, w:0, h:0, opacity:0.5, visible:true, locked:true },
 };
 
-const SNAP_KEYS = ['shape','tileType','tileOffsetY','customPts','customClosed','customAngle',
+const SNAP_KEYS = ['shape','tileType','tileOffsetX','tileOffsetY','customPts','customClosed','customAngle',
   'size','scale','corner','jitter','stroke',
   'bg','fg','fill','attractors','selected'];
 const UI_CONTROLS = {
-  shape:'shape', tileType:'tileType', tileOffsetY:'tileOffsetY',
+  shape:'shape', tileType:'tileType', tileOffsetX:'tileOffsetX', tileOffsetY:'tileOffsetY',
   customAngle:'customAngle',
   size:'size', scale:'scale', corner:'corner', jitter:'jitter', stroke:'stroke',
   bg:'bg', fg:'fg', fill:'fill',
@@ -696,8 +719,10 @@ function drawGrid(){
       let cx = i*s + s/2, cy = j*s + s/2;
       if(S.tileType==='brick-row' && (j&1)) cx += s/2;
       if(S.tileType==='brick-col' && (i&1)) cy += s/2;
-      // Independent vertical stagger: every other column shifts by this fraction
-      // of a cell (-1..1). Stacks on top of brick-col when both are active.
+      // Independent staggers: every other row shifts horizontally / every
+      // other column shifts vertically by these fractions of a cell (-1..1).
+      // Stack on top of the brick presets when both are active.
+      if(S.tileOffsetX && (j&1)) cx += S.tileOffsetX * s;
       if(S.tileOffsetY && (i&1)) cy += S.tileOffsetY * s;
 
       const rng = mulberry32(((i*374761393)^(j*668265263)) >>> 0);
@@ -744,6 +769,15 @@ function draw(){
   ctx.scale(S.zoom, S.zoom);
   ctx.lineWidth = S.stroke / S.zoom;
   drawGrid();
+
+  // Reference image: drawn above the pattern (so the user can trace) but
+  // below the attractor handles so they remain interactable.
+  if(S.image.el && S.image.visible){
+    ctx.save();
+    ctx.globalAlpha = clamp(S.image.opacity, 0, 1);
+    ctx.drawImage(S.image.el, S.image.x, S.image.y, S.image.w, S.image.h);
+    ctx.restore();
+  }
 
   if(!S.hideAttractors){
     drawAttractors();
@@ -1023,6 +1057,7 @@ bindRange('scale','scale', v=>v.toFixed(2));
 bindRange('corner','corner', v=>v.toFixed(0));
 bindRange('jitter','jitter', v=>v.toFixed(2));
 bindRange('stroke','stroke', v=>v.toFixed(1));
+bindRange('tileOffsetX','tileOffsetX', v=>v.toFixed(2));
 bindRange('tileOffsetY','tileOffsetY', v=>v.toFixed(2));
 bindRange('aStrength','aStrength', v=>v.toFixed(2), v=>{
   if(S.selected>=0 && S.attractors[S.selected]){
@@ -1057,6 +1092,29 @@ function syncShapeUI(){
   if(S.shape==='custom') drawEditor();
 }
 syncShapeUI();
+
+// Inject a reset (↻) button next to every slider+value row so each control
+// can be returned to its original HTML default in one click. Reads the
+// slider's `defaultValue` (the `value=` attribute as written in markup) and
+// re-fires the input event so existing handlers (state updates, redraws,
+// per-attractor side effects) all run.
+document.querySelectorAll('.row').forEach(row => {
+  if(row.querySelector('button.reset')) return;
+  const slider = row.querySelector('input[type=range]');
+  const valBox = row.querySelector('input.v');
+  if(!slider) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'reset';
+  btn.textContent = '↻';
+  btn.title = 'Reset to default';
+  btn.addEventListener('click', () => {
+    slider.value = slider.defaultValue;
+    if(valBox && valBox.defaultValue !== '') valBox.value = slider.defaultValue;
+    slider.dispatchEvent(new Event('input', {bubbles:true}));
+  });
+  row.appendChild(btn);
+});
 
 // ---------- custom shape editor ----------
 const sEd = $('shapeEd'); const sCtx = sEd.getContext('2d');
@@ -1272,6 +1330,57 @@ $('shapeClose').addEventListener('click', ()=>{
   S.customClosed = !S.customClosed; drawEditor(); draw();
 });
 $('tileType').addEventListener('change', e => { S.tileType = e.target.value; draw(); });
+
+// ---------- reference image ----------
+$('imgFile').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    S.image.el = img;
+    // Place centered on the current view, fit to ~60% of the smaller view dim
+    // so it's clearly visible without overflowing.
+    const fit = Math.min(S.w, S.h) * 0.6 / S.zoom;
+    const k = Math.min(fit / img.naturalWidth, fit / img.naturalHeight, 1);
+    S.image.w = img.naturalWidth * k;
+    S.image.h = img.naturalHeight * k;
+    const [vx, vy] = screenToWorld(S.w/2, S.h/2);
+    S.image.x = vx - S.image.w/2;
+    S.image.y = vy - S.image.h/2;
+    S.image.visible = true;
+    $('imgVisible').checked = true;
+    draw();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); alert('Could not load that image.'); };
+  img.src = url;
+});
+$('imgOpacity').addEventListener('input', e => {
+  S.image.opacity = parseFloat(e.target.value);
+  $('imgOpacityV').value = S.image.opacity.toFixed(2);
+  draw();
+});
+$('imgOpacityV').addEventListener('input', e => {
+  const v = clamp(parseFloat(e.target.value)||0, 0, 1);
+  S.image.opacity = v;
+  $('imgOpacity').value = v;
+  draw();
+});
+$('imgVisible').addEventListener('change', e => { S.image.visible = e.target.checked; draw(); });
+$('imgLocked').addEventListener('change',  e => { S.image.locked  = e.target.checked; updateHoverCursor(); });
+$('imgRemove').addEventListener('click', () => {
+  S.image.el = null; S.image.x = S.image.y = S.image.w = S.image.h = 0;
+  $('imgFile').value = '';
+  draw();
+});
+
+// True if (wx, wy) sits inside the reference image's world-space rectangle.
+function imageHit(wx, wy){
+  const im = S.image;
+  if(!im.el || !im.visible || im.locked) return false;
+  return wx >= im.x && wy >= im.y && wx <= im.x + im.w && wy <= im.y + im.h;
+}
 $('bg').addEventListener('input', e => { S.bg = e.target.value; draw(); });
 $('fg').addEventListener('input', e => { S.fg = e.target.value; draw(); });
 $('fill').addEventListener('change', e => { S.fill = e.target.checked; draw(); });
@@ -1661,6 +1770,15 @@ cnv.addEventListener('mousedown', e => {
     return;
   }
 
+  // Reference-image drag (only when unlocked + visible). Comes before
+  // attractor handling so the user can grab the image even where it
+  // overlaps an attractor's bounding circle.
+  if(imageHit(wx, wy)){
+    drag = { kind:'image', startX:wx, startY:wy, imgX0:S.image.x, imgY0:S.image.y };
+    cnv.style.cursor = 'grabbing';
+    return;
+  }
+
   // Free-transform: scale handles on the selected pen/ellipse attractor.
   // A vertex/handle hit on the selected attractor wins, so dragging a node
   // at an extremum still drags the node rather than starting a scale drag.
@@ -1850,6 +1968,15 @@ addEventListener('mousemove', e => {
   if(!drag){ updateHoverCursor(); }
 
   if(drag==null) return;
+
+  // Reference-image drag: independent of any attractor.
+  if(drag.kind === 'image'){
+    S.image.x = drag.imgX0 + (wx - drag.startX);
+    S.image.y = drag.imgY0 + (wy - drag.startY);
+    draw();
+    return;
+  }
+
   const a = S.attractors[drag.i];
 
   // Magnetic-anchor drag (independent of geometry)
@@ -1968,6 +2095,7 @@ function updatePenCursor(){
 function updateHoverCursor(){
   if(panning || drag) return;            // active interaction owns the cursor
   if(S.spaceDown){ cnv.style.cursor = 'grab'; return; }
+  if(imageHit(S.mouseW[0], S.mouseW[1])){ cnv.style.cursor = 'grab'; return; }
   if(S.tool === 'pen'){ updatePenCursor(); return; }
   const hit = pickAttractor(S.mouseW[0], S.mouseW[1], 12);
   if(hit && hit.vertex === 'mag') cnv.style.cursor = 'move';
@@ -2072,10 +2200,6 @@ function pickTool(t){
 // offscreen target — no parallel render pipeline to maintain.
 function renderPNG(scale){
   scale = scale || 1;
-  if(scale === 1){
-    // Fast path: the on-screen canvas already holds what we want.
-    return cnv.toDataURL('image/png');
-  }
   const off = document.createElement('canvas');
   off.width  = Math.round(S.w * S.dpr * scale);
   off.height = Math.round(S.h * S.dpr * scale);
@@ -2084,10 +2208,12 @@ function renderPNG(scale){
   const origCtx = ctx;
   const origDpr = S.dpr;
   const origHide = S.hideAttractors;
+  const origImgVis = S.image.visible;
 
   ctx = offCtx;
   S.dpr = origDpr * scale;
   S.hideAttractors = true;          // never bake handles into the export
+  S.image.visible = false;          // reference image is design-time only
   try {
     draw();
     return off.toDataURL('image/png');
@@ -2095,6 +2221,7 @@ function renderPNG(scale){
     ctx = origCtx;
     S.dpr = origDpr;
     S.hideAttractors = origHide;
+    S.image.visible = origImgVis;
     draw();                          // restore the on-screen render
   }
 }
@@ -2136,8 +2263,10 @@ function renderSVGGrid(out){
       let cx = i*s + s/2, cy = j*s + s/2;
       if(S.tileType==='brick-row' && (j&1)) cx += s/2;
       if(S.tileType==='brick-col' && (i&1)) cy += s/2;
-      // Independent vertical stagger: every other column shifts by this fraction
-      // of a cell (-1..1). Stacks on top of brick-col when both are active.
+      // Independent staggers: every other row shifts horizontally / every
+      // other column shifts vertically by these fractions of a cell (-1..1).
+      // Stack on top of the brick presets when both are active.
+      if(S.tileOffsetX && (j&1)) cx += S.tileOffsetX * s;
       if(S.tileOffsetY && (i&1)) cy += S.tileOffsetY * s;
 
       const rng = mulberry32(((i*374761393)^(j*668265263)) >>> 0);
