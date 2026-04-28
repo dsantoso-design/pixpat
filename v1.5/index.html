@@ -175,12 +175,22 @@
         <option value="brick-row">Brick by row</option>
         <option value="brick-col">Brick by column</option>
       </select>
-      <div class="row" style="margin-top:6px"><label>Horiz. offset</label>
-        <input id="tileOffsetX" type="range" min="-1" max="1" value="0" step="0.01">
-        <input class="v" id="tileOffsetXV" type="number" min="-1" max="1" step="0.01"></div>
-      <div class="row"><label>Vert. offset</label>
-        <input id="tileOffsetY" type="range" min="-1" max="1" value="0" step="0.01">
-        <input class="v" id="tileOffsetYV" type="number" min="-1" max="1" step="0.01"></div>
+      <!-- H / V offsets share one reset button on the right. Each row opts
+           out of the auto-reset injection via data-no-reset. -->
+      <div style="display:flex;gap:6px;align-items:stretch;margin-top:6px">
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">
+          <div class="row" data-no-reset="true" style="margin:0">
+            <label style="flex:0 0 16px">H:</label>
+            <input id="tileOffsetX" type="range" min="-1" max="1" value="0" step="0.01">
+            <input class="v" id="tileOffsetXV" type="number" min="-1" max="1" step="0.01"></div>
+          <div class="row" data-no-reset="true" style="margin:0">
+            <label style="flex:0 0 16px">V:</label>
+            <input id="tileOffsetY" type="range" min="-1" max="1" value="0" step="0.01">
+            <input class="v" id="tileOffsetYV" type="number" min="-1" max="1" step="0.01"></div>
+        </div>
+        <button class="reset" id="tileXYReset" title="Reset H and V to 0"
+          style="height:auto;align-self:stretch">↻</button>
+      </div>
     </div>
 
     <div class="section">
@@ -297,6 +307,11 @@
       <div class="row"><label>Radius</label>
         <input id="aFalloff" type="range" min="20" max="1200" value="420" step="2">
         <input class="v" id="aFalloffV" type="number" min="20" max="1200" step="2"></div>
+      <!-- Ellipse-only: visual size of the shape (rx/ry), independent of the
+           field-falloff radius above. Hidden until an ellipse is selected. -->
+      <div class="row" id="ellipseSizeRow" style="display:none"><label>Size</label>
+        <input id="aEllipseSize" type="range" min="5" max="2000" value="100" step="2">
+        <input class="v" id="aEllipseSizeV" type="number" min="5" max="2000" step="2"></div>
       <div class="row"><label>Pull</label>
         <input id="aPull" type="range" min="-1" max="1" value="0" step="0.01">
         <input class="v" id="aPullV" type="number" min="-1" max="1" step="0.01"></div>
@@ -352,7 +367,7 @@ const S = {
   size:42, scale:0.23, corner:50, jitter:0, stroke:0,
   attractors:[], selected:-1,
   tool:'point', draft:null, mouseW:[0,0],
-  aMode:'scale', aStrength:-1, aFalloff:420, aPull:0, aCurve:1.7,
+  aMode:'scale', aStrength:-1, aFalloff:420, aPull:0, aCurve:1.7, aEllipseSize:100,
   bg:'#f1e4c9', fg:'#0d0e10', fill:true,
   muteAttractors:false, hideAttractors:false,
   zoom:1, panX:0, panY:0,
@@ -1122,6 +1137,13 @@ bindRange('jitter','jitter', v=>v.toFixed(2));
 bindRange('stroke','stroke', v=>v.toFixed(1));
 bindRange('tileOffsetX','tileOffsetX', v=>v.toFixed(2));
 bindRange('tileOffsetY','tileOffsetY', v=>v.toFixed(2));
+$('tileXYReset').addEventListener('click', () => {
+  ['tileOffsetX','tileOffsetY'].forEach(id => {
+    const el = $(id);
+    el.value = el.defaultValue;
+    el.dispatchEvent(new Event('input', {bubbles:true}));
+  });
+});
 bindRange('aStrength','aStrength', v=>v.toFixed(2), v=>{
   if(S.selected>=0 && S.attractors[S.selected]){
     S.attractors[S.selected].strength = v;
@@ -1130,14 +1152,17 @@ bindRange('aStrength','aStrength', v=>v.toFixed(2), v=>{
 });
 bindRange('aFalloff','aFalloff', v=>v.toFixed(0), v=>{
   const a = S.attractors[S.selected]; if(!a) return;
-  const prev = a.r || v;
   a.r = v;
-  if(a.type==='ellipse'){
-    const k = v / (prev || 1);
-    a.rx = Math.max(1, a.rx * k);
-    a.ry = Math.max(1, a.ry * k);
-    invalidateFlat(a);
-  }
+});
+// Ellipse-only: scale rx/ry uniformly while preserving aspect ratio.
+// `v` is the new average radius; we map current (rx+ry)/2 → v.
+bindRange('aEllipseSize','aEllipseSize', v=>v.toFixed(0), v=>{
+  const a = S.attractors[S.selected]; if(!a || a.type!=='ellipse') return;
+  const cur = Math.max(1, (a.rx + a.ry) / 2);
+  const k = v / cur;
+  a.rx = Math.max(1, a.rx * k);
+  a.ry = Math.max(1, a.ry * k);
+  invalidateFlat(a);
 });
 bindRange('aPull','aPull', v=>v.toFixed(2), v=>{
   if(S.selected>=0 && S.attractors[S.selected]) S.attractors[S.selected].pull = v;
@@ -1372,6 +1397,7 @@ $('presetFile').addEventListener('change', e => {
 // re-fires the input event so existing handlers (state updates, redraws,
 // per-attractor side effects) all run.
 document.querySelectorAll('.row').forEach(row => {
+  if(row.dataset.noReset === 'true') return;     // opt-out for paired controls
   if(row.querySelector('button.reset')) return;
   const slider = row.querySelector('input[type=range]');
   const valBox = row.querySelector('input.v');
@@ -1591,7 +1617,15 @@ sEd.addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('mousemove', e=>{
   if(edDrag<0) return;
   const [lx,ly] = edToLocal(e.clientX, e.clientY);
-  S.customPts[edDrag] = [clamp(lx,-0.5,0.5), clamp(ly,-0.5,0.5)];
+  let nx = clamp(lx, -0.5, 0.5), ny = clamp(ly, -0.5, 0.5);
+  // Hold Ctrl while dragging to snap the dragged vertex to the editor's
+  // 1/8 grid lines (matches the visible guidelines).
+  if(e.ctrlKey || e.metaKey){
+    const step = 1/8;
+    nx = Math.round(nx/step)*step;
+    ny = Math.round(ny/step)*step;
+  }
+  S.customPts[edDrag] = [nx, ny];
   drawEditor(); draw();
 });
 addEventListener('mouseup', ()=>{ edDrag=-1; });
@@ -1869,9 +1903,34 @@ function selectAttractor(i){
     $('aCurve').value    = a.curve;    $('aCurveV').value    = a.curve.toFixed(2);
     document.querySelectorAll('#amode button').forEach(b =>
       b.classList.toggle('on', b.dataset.m === a.mode));
+    // Ellipse-only Size control: show + sync to current rx/ry average.
+    const ellipseRow = $('ellipseSizeRow');
+    if(a.type === 'ellipse'){
+      const sz = (a.rx + a.ry) / 2;
+      S.aEllipseSize = sz;
+      $('aEllipseSize').value = sz;
+      $('aEllipseSizeV').value = Math.round(sz);
+      ellipseRow.style.display = '';
+    } else {
+      ellipseRow.style.display = 'none';
+    }
+  } else {
+    $('ellipseSizeRow').style.display = 'none';
   }
   updateSelPill();
   renderAList();
+}
+
+// Re-sync the Size slider when the user reshapes the selected ellipse via
+// a handle drag, free-transform scale, etc.
+function syncEllipseSize(){
+  if(S.selected < 0) return;
+  const a = S.attractors[S.selected];
+  if(!a || a.type !== 'ellipse') return;
+  const sz = (a.rx + a.ry) / 2;
+  S.aEllipseSize = sz;
+  $('aEllipseSize').value = sz;
+  $('aEllipseSizeV').value = Math.round(sz);
 }
 
 // ---------- pen draft ----------
@@ -2333,6 +2392,7 @@ addEventListener('mousemove', e => {
       a.mag[0] = px + (src.mag[0]-px)*kx;
       a.mag[1] = py + (src.mag[1]-py)*ky;
     }
+    if(a.type === 'ellipse') syncEllipseSize();
     invalidateFlat(a);
     draw();
     return;
@@ -2364,9 +2424,16 @@ addEventListener('mousemove', e => {
     const v = drag.vertex;
     if(v==='createEllipse'){
       a.rot = 0;
-      a.rx = Math.max(1, Math.abs(wx - drag.startX));
-      a.ry = Math.max(1, Math.abs(wy - drag.startY));
+      let dxA = Math.abs(wx - drag.startX);
+      let dyA = Math.abs(wy - drag.startY);
+      if(e.shiftKey){                         // hold Shift → constrain to circle
+        const r = Math.max(dxA, dyA);
+        dxA = r; dyA = r;
+      }
+      a.rx = Math.max(1, dxA);
+      a.ry = Math.max(1, dyA);
       invalidateFlat(a);
+      syncEllipseSize();
     } else if(v===0 || v===-1){
       const dx = wx - drag.lastX, dy = wy - drag.lastY;
       a.x += dx; a.y += dy;
@@ -2377,11 +2444,13 @@ addEventListener('mousemove', e => {
       a.rot = Math.atan2(dy, dx);
       a.rx = L;
       if(!a.ry || a.ry<=0.1) a.ry = L*0.5;
+      syncEllipseSize();
     } else if(v===2){
       const dx = wx - a.x, dy = wy - a.y;
       const c=Math.cos(a.rot), s=Math.sin(a.rot);
       const ry = Math.abs(dx*(-s) + dy*c);
       a.ry = Math.max(1, ry);
+      syncEllipseSize();
     }
     invalidateFlat(a);
   } else if(a.type==='gradient'){
