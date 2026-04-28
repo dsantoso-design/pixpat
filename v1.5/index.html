@@ -26,9 +26,9 @@
   .aItem.on{border-color:var(--accent);background:#1a2a25;color:var(--accent)}
   .aItem .name{flex:1;min-width:0;background:transparent;border:1px solid transparent;
     color:inherit;font:inherit;font-size:11px;padding:2px 4px;border-radius:3px;
-    text-overflow:ellipsis}
-  .aItem .name:hover{border-color:var(--line)}
-  .aItem .name:focus{outline:none;background:var(--panel);border-color:var(--accent);color:var(--text)}
+    overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  span.name{user-select:none}
+  input.name:focus{outline:none;background:var(--panel);border-color:var(--accent);color:var(--text)}
   .aItem .mode{color:var(--muted);font-size:10px;flex:0 0 auto;white-space:nowrap}
   .aItem.on .mode{color:var(--accent)}
   .aItem .btn{width:18px;height:18px;display:flex;align-items:center;justify-content:center;
@@ -1831,36 +1831,38 @@ function renderAList(){
     const el = document.createElement('div');
     el.className = 'aItem' + (i===S.selected ? ' on' : '');
 
-    const name = document.createElement('input');
-    name.type = 'text';
+    // Display as a span; double-click swaps it for an input to rename.
+    const name = document.createElement('span');
     name.className = 'name';
-    name.value = a.name || defaultName(a, i);
+    name.textContent = a.name || defaultName(a, i);
     name.title = 'Double-click to rename';
-    name.readOnly = true;
-    // Single click should select the row, not focus the input. Block default
-    // focus on mousedown while read-only; the click still bubbles to the row.
-    name.addEventListener('mousedown', ev => {
-      if(name.readOnly) ev.preventDefault();
-    });
     name.addEventListener('dblclick', ev => {
       ev.stopPropagation();
-      name.readOnly = false;
-      name.focus();
-      name.select();
-    });
-    name.addEventListener('blur', () => { name.readOnly = true; });
-    name.addEventListener('keydown', ev => {
-      if(ev.key === 'Enter'){ name.blur(); }
-      else if(ev.key === 'Escape'){ name.value = a.name || defaultName(a, i); name.blur(); }
-    });
-    name.addEventListener('change', () => {
-      const v = name.value.trim();
-      const next = v || defaultName(a, i);
-      const cur  = a.name || defaultName(a, i);
-      if(next === cur){ name.value = next; return; }
-      pushHistory();
-      a.name = next;
-      name.value = next;
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'name';
+      inp.value = a.name || defaultName(a, i);
+      const commit = () => {
+        const v = inp.value.trim();
+        const next = v || defaultName(a, i);
+        const cur  = a.name || defaultName(a, i);
+        if(next !== cur){ pushHistory(); a.name = next; }
+        name.textContent = next;
+        if(inp.parentNode) inp.parentNode.replaceChild(name, inp);
+      };
+      inp.addEventListener('keydown', kv => {
+        if(kv.key === 'Enter'){ inp.blur(); }
+        else if(kv.key === 'Escape'){
+          inp.value = a.name || defaultName(a, i);
+          if(inp.parentNode) inp.parentNode.replaceChild(name, inp);
+        }
+      });
+      inp.addEventListener('blur', commit);
+      inp.addEventListener('mousedown', e => e.stopPropagation());
+      inp.addEventListener('click', e => e.stopPropagation());
+      el.replaceChild(inp, name);
+      inp.focus();
+      inp.select();
     });
 
     const mute = document.createElement('button');
