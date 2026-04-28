@@ -2010,6 +2010,7 @@ function commitDraft(closed){
   newPen.mag = attractorCentroid(newPen);
   S.attractors.push(newPen);
   S.draft = null;
+  renderAList();
   selectAttractor(S.attractors.length-1);
   draw();
 }
@@ -2337,6 +2338,7 @@ cnv.addEventListener('mousedown', e => {
       S.attractors.push({ type:'gradient', a:[wx,wy], b:[wx,wy], r:S.aFalloff, pull:S.aPull||0,
         mode:S.aMode, strength:S.aStrength, curve:S.aCurve, mag:[wx,wy], magLocked:true });
       const i = S.attractors.length-1;
+      renderAList();
       selectAttractor(i);
       drag = { i, vertex:1, lastX:wx, lastY:wy };
     } else return;
@@ -2358,6 +2360,7 @@ cnv.addEventListener('mousedown', e => {
         mag:[wx,wy], magLocked:true
       });
       const i = S.attractors.length-1;
+      renderAList();
       selectAttractor(i);
       // Creation drag: click = center; drag vector sets rx (|dx|) and ry (|dy|)
       drag = { i, vertex:'createEllipse', startX:wx, startY:wy, lastX:wx, lastY:wy };
@@ -2375,6 +2378,7 @@ cnv.addEventListener('mousedown', e => {
     pushHistory();
     S.attractors.push({ type:'point', x:wx, y:wy, r:S.aFalloff, pull:S.aPull||0,
       mode:S.aMode, strength:S.aStrength, curve:S.aCurve, mag:[wx,wy], magLocked:true });
+    renderAList();
     selectAttractor(S.attractors.length-1);
     drag = { i:S.attractors.length-1, vertex:-1, lastX:wx, lastY:wy };
   } else return;
