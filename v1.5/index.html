@@ -181,6 +181,18 @@
     </div>
     <label class="chk" style="margin-top:8px"><input id="fill" type="checkbox" checked> fill cells</label>
 
+    <h2>Presets</h2>
+    <select id="presetList" title="Pick a preset to load"></select>
+    <div class="seg two" style="margin-top:6px">
+      <button id="presetSave">Save current</button>
+      <button id="presetDelete" class="danger">Delete</button>
+    </div>
+    <div class="seg two">
+      <button id="presetExport">Download .json</button>
+      <button id="presetImport">Import .json</button>
+    </div>
+    <input id="presetFile" type="file" accept=".json,application/json" style="display:none">
+
     <h2>Reference image</h2>
     <input id="imgFile" type="file" accept="image/*"
       style="width:100%;font-size:11px;color:var(--muted);background:var(--panel2);
@@ -1107,6 +1119,216 @@ function syncShapeUI(){
   if(S.shape==='custom') drawEditor();
 }
 syncShapeUI();
+
+// ---------- presets ----------
+// What gets captured in a preset: everything the user chose visually except
+// view (zoom/pan), reference image, transient UI flags, and history.
+const PRESET_KEYS = ['shape','tileType','tileOffsetX','tileOffsetY',
+  'customPts','customClosed','customAngle',
+  'size','scale','corner','jitter','stroke',
+  'bg','fg','fill','attractors'];
+const PRESET_VERSION = 1;
+const LS_KEY = 'pixpat.presets.v1';
+
+function getPresetState(){
+  const o = {};
+  for(const k of PRESET_KEYS) o[k] = JSON.parse(JSON.stringify(S[k]));
+  return o;
+}
+function applyPresetState(state){
+  pushHistory();
+  for(const k of PRESET_KEYS){
+    if(k in state) S[k] = JSON.parse(JSON.stringify(state[k]));
+  }
+  invalidateAllFlat();
+  selectAttractor(-1);
+  // Sync UI controls to the loaded state.
+  for(const key in UI_CONTROLS){
+    const el = $(UI_CONTROLS[key]); if(!el) continue;
+    if(el.type === 'checkbox') el.checked = !!S[key];
+    else el.value = S[key];
+    const vEl = $(UI_CONTROLS[key]+'V');
+    if(vEl) vEl.value = S[key];
+  }
+  syncShapeUI();
+  renderAList();
+  draw();
+}
+
+function loadUserPresets(){
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; }
+  catch(e){ return {}; }
+}
+function saveUserPresets(map){
+  try { localStorage.setItem(LS_KEY, JSON.stringify(map)); }
+  catch(e){ alert('Could not save preset — localStorage is full or disabled.'); }
+}
+
+// Tiny inline starter library. Add more by saving and exporting a preset,
+// then pasting its `state` block into this object.
+const BUILT_IN_PRESETS = {
+  "Halftone radial": {
+    state: {
+      shape:'square', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
+      customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
+      size:30, scale:0.25, corner:30, jitter:0, stroke:0,
+      bg:'#f1e4c9', fg:'#0d0e10', fill:true,
+      attractors:[{
+        type:'point', x:0, y:0, r:520, pull:0,
+        mode:'halftone', strength:1, curve:1.6, mag:[0,0]
+      }]
+    }
+  },
+  "Diamond shrink center": {
+    state: {
+      shape:'diamond', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
+      customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
+      size:34, scale:0.55, corner:0, jitter:0, stroke:0,
+      bg:'#0d0e10', fg:'#f1e4c9', fill:true,
+      attractors:[{
+        type:'point', x:0, y:0, r:380, pull:0,
+        mode:'scale', strength:-1, curve:1.4, mag:[0,0]
+      }]
+    }
+  },
+  "Bar weave": {
+    state: {
+      shape:'custom', tileType:'brick-row', tileOffsetX:0, tileOffsetY:0,
+      customPts:[[-0.45,-0.1],[0.45,-0.1],[0.45,0.1],[-0.45,0.1]], customClosed:true, customAngle:0,
+      size:38, scale:0.8, corner:30, jitter:0, stroke:0,
+      bg:'#f1e4c9', fg:'#1f3a55', fill:true,
+      attractors:[]
+    }
+  },
+};
+
+function presetExists(name){
+  if(BUILT_IN_PRESETS[name]) return 'builtin';
+  if(loadUserPresets()[name]) return 'user';
+  return null;
+}
+function rebuildPresetList(selectName){
+  const sel = $('presetList');
+  sel.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = ''; placeholder.textContent = '— select preset —';
+  sel.appendChild(placeholder);
+
+  const groupBuiltIn = document.createElement('optgroup');
+  groupBuiltIn.label = 'Built-in';
+  for(const name of Object.keys(BUILT_IN_PRESETS)){
+    const o = document.createElement('option');
+    o.value = 'b:' + name; o.textContent = name;
+    groupBuiltIn.appendChild(o);
+  }
+  sel.appendChild(groupBuiltIn);
+
+  const userMap = loadUserPresets();
+  const userNames = Object.keys(userMap).sort();
+  if(userNames.length){
+    const groupUser = document.createElement('optgroup');
+    groupUser.label = 'My presets';
+    for(const name of userNames){
+      const o = document.createElement('option');
+      o.value = 'u:' + name; o.textContent = name;
+      groupUser.appendChild(o);
+    }
+    sel.appendChild(groupUser);
+  }
+
+  if(selectName){
+    sel.value = selectName;
+    if(sel.value !== selectName) sel.value = '';
+  }
+}
+rebuildPresetList();
+
+$('presetList').addEventListener('change', e => {
+  const v = e.target.value;
+  if(!v) return;
+  const [kind, name] = [v[0], v.slice(2)];
+  const entry = kind === 'b' ? BUILT_IN_PRESETS[name] : loadUserPresets()[name];
+  if(!entry) return;
+  applyPresetState(entry.state);
+});
+
+$('presetSave').addEventListener('click', () => {
+  const suggested = (() => {
+    const v = $('presetList').value;
+    return v && v[0]==='u' ? v.slice(2) : '';
+  })();
+  const name = (prompt('Preset name:', suggested) || '').trim();
+  if(!name) return;
+  if(BUILT_IN_PRESETS[name]){
+    alert('That name is reserved by a built-in preset. Pick another.');
+    return;
+  }
+  const map = loadUserPresets();
+  if(map[name] && !confirm(`Overwrite "${name}"?`)) return;
+  map[name] = { version: PRESET_VERSION, state: getPresetState() };
+  saveUserPresets(map);
+  rebuildPresetList('u:' + name);
+});
+
+$('presetDelete').addEventListener('click', () => {
+  const v = $('presetList').value;
+  if(!v || v[0] !== 'u'){
+    alert('Select one of your saved presets to delete.');
+    return;
+  }
+  const name = v.slice(2);
+  if(!confirm(`Delete "${name}"?`)) return;
+  const map = loadUserPresets();
+  delete map[name];
+  saveUserPresets(map);
+  rebuildPresetList();
+});
+
+$('presetExport').addEventListener('click', () => {
+  const v = $('presetList').value;
+  let name = 'pixpat-preset';
+  if(v && v[0] === 'u') name = v.slice(2);
+  else if(v && v[0] === 'b') name = v.slice(2);
+  const blob = new Blob([JSON.stringify({
+    type: 'pixpat-preset',
+    version: PRESET_VERSION,
+    name,
+    state: getPresetState(),
+  }, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.download = `${name.replace(/[^a-z0-9-_ ]/gi,'_')}.json`;
+  link.href = URL.createObjectURL(blob);
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+});
+
+$('presetImport').addEventListener('click', () => $('presetFile').click());
+$('presetFile').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      // Accept either a {state: {...}} envelope or a flat preset state object.
+      const state = (data && data.state) ? data.state : data;
+      if(!state || typeof state !== 'object') throw new Error('invalid');
+      applyPresetState(state);
+      // Offer to save the imported preset under its name (if provided).
+      const nm = (data && data.name) || '';
+      if(nm && !BUILT_IN_PRESETS[nm] && confirm(`Save imported preset as "${nm}" in your library?`)){
+        const map = loadUserPresets();
+        map[nm] = { version: PRESET_VERSION, state };
+        saveUserPresets(map);
+        rebuildPresetList('u:' + nm);
+      }
+    } catch(err){
+      alert('That file is not a valid pixpat preset.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = ''; // allow re-importing the same file later
+});
 
 // Inject a reset (↻) button next to every slider+value row so each control
 // can be returned to its original HTML default in one click. Reads the
