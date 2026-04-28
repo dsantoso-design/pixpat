@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5 — pixel pattern designer</title>
+<title>pixpat v1.5.1 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#0d0e10; --panel:#16181c; --panel2:#1c1f25; --line:#2a2e36;
@@ -109,15 +109,22 @@
     padding:6px 10px 10px;margin:10px 0}
   .section > h2:first-child{margin-top:6px}
   .section > h2{margin-top:8px}
-  /* Tile-offset paired controls: 4-col grid (label, slider, value, reset). */
-  .tile-offsets{display:grid;grid-template-columns:18px 1fr 52px 22px;
-    gap:4px 6px;align-items:center;margin-top:6px}
-  .tile-offsets > .lab{color:var(--muted);font-size:12px}
-  .tile-offsets > input[type=range]{min-width:0}
   /* Shape preset icon grid */
   .shape-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:4px}
   .shape-grid button{margin:0;padding:6px 0;font-size:14px;line-height:1}
   .shape-grid button.on{border-color:var(--accent);color:var(--accent);background:#1a2a25}
+  /* Collapsible sub-sections (used for H/V offsets, the shape editor, etc.). */
+  details.fold{margin-top:6px}
+  details.fold > summary{cursor:pointer;list-style:none;
+    background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+    padding:5px 8px;color:var(--muted);font-size:11px;letter-spacing:.06em;
+    text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;
+    user-select:none}
+  details.fold > summary::-webkit-details-marker{display:none}
+  details.fold > summary::after{content:'▾';color:var(--muted);transition:transform .15s}
+  details.fold[open] > summary{color:var(--accent);border-color:var(--accent)}
+  details.fold[open] > summary::after{transform:rotate(180deg);color:var(--accent)}
+  details.fold > .body{padding-top:6px}
 </style>
 </head>
 <body>
@@ -158,20 +165,23 @@
         <button data-p="hex"         title="Hexagon">⬣</button>
         <button data-p="houndstooth" title="Houndstooth">▦</button>
       </div>
-      <div id="customBox" style="margin-top:8px">
-        <div class="row" style="margin:0"><label>Angle</label>
-          <input id="customAngle" type="range" min="-180" max="180" value="0" step="1">
-          <input class="v" id="customAngleV" type="number" min="-180" max="180" step="1"></div>
-        <canvas id="shapeEd" width="240" height="240"
-          style="width:100%;aspect-ratio:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-top:6px;display:block;cursor:crosshair"></canvas>
-        <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.35">
-          Click to add a vertex · drag (Ctrl: snap) · dbl-click to remove · <b id="vCount" style="color:var(--text)">0</b> vertices
+      <details class="fold" id="shapeEditFold">
+        <summary>Edit shape</summary>
+        <div class="body" id="customBox">
+          <div class="row" style="margin:0"><label>Angle</label>
+            <input id="customAngle" type="range" min="-180" max="180" value="0" step="1">
+            <input class="v" id="customAngleV" type="number" min="-180" max="180" step="1"></div>
+          <canvas id="shapeEd" width="240" height="240"
+            style="width:100%;aspect-ratio:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-top:6px;display:block;cursor:crosshair"></canvas>
+          <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.35">
+            Click to add a vertex · drag (Ctrl: snap) · dbl-click to remove · <b id="vCount" style="color:var(--text)">0</b> vertices
+          </div>
+          <div class="seg two">
+            <button id="shapeClear" class="danger">Clear</button>
+            <button id="shapeClose">Toggle closed</button>
+          </div>
         </div>
-        <div class="seg two">
-          <button id="shapeClear" class="danger">Clear</button>
-          <button id="shapeClose">Toggle closed</button>
-        </div>
-      </div>
+      </details>
     </div>
 
     <div class="section">
@@ -181,18 +191,17 @@
         <option value="brick-row">Brick by row</option>
         <option value="brick-col">Brick by column</option>
       </select>
-      <!-- H / V offsets in a 4-column grid: label, slider, value, reset.
-           The reset button spans both rows. -->
-      <div class="tile-offsets">
-        <span class="lab">H:</span>
-        <input id="tileOffsetX" type="range" min="-1" max="1" value="0" step="0.01">
-        <input class="v" id="tileOffsetXV" type="number" min="-1" max="1" step="0.01">
-        <button class="reset" id="tileXYReset" title="Reset H and V to 0"
-          style="grid-row:span 2;align-self:stretch;height:auto">↻</button>
-        <span class="lab">V:</span>
-        <input id="tileOffsetY" type="range" min="-1" max="1" value="0" step="0.01">
-        <input class="v" id="tileOffsetYV" type="number" min="-1" max="1" step="0.01">
-      </div>
+      <details class="fold">
+        <summary>Cell offsets</summary>
+        <div class="body">
+          <div class="row" style="margin:0"><label>H:</label>
+            <input id="tileOffsetX" type="range" min="-1" max="1" value="0" step="0.01">
+            <input class="v" id="tileOffsetXV" type="number" min="-1" max="1" step="0.01"></div>
+          <div class="row"><label>V:</label>
+            <input id="tileOffsetY" type="range" min="-1" max="1" value="0" step="0.01">
+            <input class="v" id="tileOffsetYV" type="number" min="-1" max="1" step="0.01"></div>
+        </div>
+      </details>
     </div>
 
     <div class="section">
@@ -204,11 +213,8 @@
         <input id="size" type="range" min="4" max="120" value="42" step="1">
         <input class="v" id="sizeV" type="number" min="4" max="120" step="1"></div>
       <div class="row" id="cornerRow"><label>Round corner</label>
-        <input id="corner" type="range" min="0" max="50" value="50" step="1">
+        <input id="corner" type="range" min="0" max="50" value="0" step="1">
         <input class="v" id="cornerV" type="number" min="0" max="50" step="1"></div>
-      <div class="row"><label>Jitter</label>
-        <input id="jitter" type="range" min="0" max="5" value="0" step="0.01">
-        <input class="v" id="jitterV" type="number" min="0" max="5" step="0.01"></div>
       <div class="row"><label>Stroke</label>
         <input id="stroke" type="range" min="0" max="6" value="0" step="0.1">
         <input class="v" id="strokeV" type="number" min="0" max="6" step="0.1"></div>
@@ -367,7 +373,7 @@ function mixHex(a,b,t){
 const S = {
   shape:'dot', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
   customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
-  size:42, scale:0.23, corner:50, jitter:0, stroke:0,
+  size:42, scale:0.23, corner:0, stroke:0,
   attractors:[], selected:-1,
   tool:'point', draft:null, mouseW:[0,0],
   aMode:'scale', aStrength:-1, aFalloff:420, aPull:0, aCurve:1.7, aEllipseSize:100,
@@ -385,12 +391,12 @@ const S = {
 };
 
 const SNAP_KEYS = ['shape','tileType','tileOffsetX','tileOffsetY','customPts','customClosed','customAngle',
-  'size','scale','corner','jitter','stroke',
+  'size','scale','corner','stroke',
   'bg','fg','fill','attractors','selected'];
 const UI_CONTROLS = {
   shape:'shape', tileType:'tileType', tileOffsetX:'tileOffsetX', tileOffsetY:'tileOffsetY',
   customAngle:'customAngle',
-  size:'size', scale:'scale', corner:'corner', jitter:'jitter', stroke:'stroke',
+  size:'size', scale:'scale', corner:'corner', stroke:'stroke',
   bg:'bg', fg:'fg', fill:'fill',
 };
 
@@ -782,12 +788,9 @@ function drawGrid(){
       if(sz <= 0.5) continue;
       const cornerPx = corner * sz;
 
-      const jx = (rng()*2-1)*S.jitter*s*0.3;
-      const jy = (rng()*2-1)*S.jitter*s*0.3;
-
       ctx.fillStyle = fillColor;
       ctx.strokeStyle = fillColor;
-      cellShape(ctx, cx+jx+f.px, cy+jy+f.py, sz, 0, cornerPx, S.shape);
+      cellShape(ctx, cx+f.px, cy+f.py, sz, 0, cornerPx, S.shape);
     }
   }
 }
@@ -1096,17 +1099,9 @@ function bindRange(id, key, fmt=v=>v, onChange){
 bindRange('size','size', v=>v.toFixed(0));
 bindRange('scale','scale', v=>v.toFixed(2));
 bindRange('corner','corner', v=>v.toFixed(0));
-bindRange('jitter','jitter', v=>v.toFixed(2));
 bindRange('stroke','stroke', v=>v.toFixed(1));
 bindRange('tileOffsetX','tileOffsetX', v=>v.toFixed(2));
 bindRange('tileOffsetY','tileOffsetY', v=>v.toFixed(2));
-$('tileXYReset').addEventListener('click', () => {
-  ['tileOffsetX','tileOffsetY'].forEach(id => {
-    const el = $(id);
-    el.value = el.defaultValue;
-    el.dispatchEvent(new Event('input', {bubbles:true}));
-  });
-});
 bindRange('aStrength','aStrength', v=>v.toFixed(2), v=>{
   if(S.selected>=0 && S.attractors[S.selected]){
     S.attractors[S.selected].strength = v;
@@ -1152,7 +1147,7 @@ function syncShapeUI(){
 // view (zoom/pan), reference image, transient UI flags, and history.
 const PRESET_KEYS = ['shape','tileType','tileOffsetX','tileOffsetY',
   'customPts','customClosed','customAngle',
-  'size','scale','corner','jitter','stroke',
+  'size','scale','corner','stroke',
   'bg','fg','fill','attractors'];
 const PRESET_VERSION = 1;
 const LS_KEY = 'pixpat.presets.v1';
@@ -1198,7 +1193,7 @@ const BUILT_IN_PRESETS = {
     state: {
       shape:'square', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
       customPts:[[-0.5,-0.5],[0.5,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
-      size:30, scale:0.25, corner:30, jitter:0, stroke:0,
+      size:30, scale:0.25, corner:30, stroke:0,
       bg:'#f1e4c9', fg:'#0d0e10', fill:true,
       attractors:[{
         type:'point', x:0, y:0, r:520, pull:0,
@@ -1210,7 +1205,7 @@ const BUILT_IN_PRESETS = {
     state: {
       shape:'diamond', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
       customPts:[[0,-0.5],[0.5,0],[0,0.5],[-0.5,0]], customClosed:true, customAngle:0,
-      size:34, scale:0.55, corner:0, jitter:0, stroke:0,
+      size:34, scale:0.55, corner:0, stroke:0,
       bg:'#0d0e10', fg:'#f1e4c9', fill:true,
       attractors:[{
         type:'point', x:0, y:0, r:380, pull:0,
@@ -1222,7 +1217,7 @@ const BUILT_IN_PRESETS = {
     state: {
       shape:'bar', tileType:'brick-row', tileOffsetX:0, tileOffsetY:0,
       customPts:[[-0.45,-0.1],[0.45,-0.1],[0.45,0.1],[-0.45,0.1]], customClosed:true, customAngle:0,
-      size:38, scale:0.8, corner:0, jitter:0, stroke:0,
+      size:38, scale:0.8, corner:0, stroke:0,
       bg:'#f1e4c9', fg:'#1f3a55', fill:true,
       attractors:[]
     }
@@ -1429,8 +1424,11 @@ function loadShapePreset(name, opts){
   S.customPts = p.pts.map(q => q === null ? null : q.slice());
   S.customClosed = p.closed;
   S.customAngle = 0;
+  S.corner = 0;                       // every fresh shape starts crisp
   $('customAngle').value = 0;
   $('customAngleV').value = 0;
+  $('corner').value = 0;
+  $('cornerV').value = 0;
   syncShapeIcon();
   drawEditor();
   draw();
@@ -2670,9 +2668,7 @@ function renderSVGGrid(out){
       else if(f.halftone < 0) sz = lerp(sz, 0,         -f.halftone);
       if(sz<=0.5) continue;
 
-      const jx = (rng()*2-1)*S.jitter*s*0.3;
-      const jy = (rng()*2-1)*S.jitter*s*0.3;
-      const [Sx,Sy] = toScreen(cx+jx+f.px, cy+jy+f.py);
+      const [Sx,Sy] = toScreen(cx+f.px, cy+f.py);
       const SS = sz * S.zoom;
       const half = SS/2;
       const fillA = S.fill ? fillColor : 'none';
