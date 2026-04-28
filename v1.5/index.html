@@ -102,6 +102,13 @@
     background:transparent;border:1px solid transparent;color:var(--muted);
     border-radius:4px;cursor:pointer}
   .row button.reset:hover{border-color:var(--accent);color:var(--accent)}
+  /* Each functional group (Shape, Color, Tool, etc.) sits inside its own
+     low-opacity 'island' so the panels read as a stack of cards. */
+  .section{background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.05);border-radius:8px;
+    padding:6px 10px 10px;margin:10px 0}
+  .section > h2:first-child{margin-top:6px}
+  .section > h2{margin-top:8px}
 </style>
 </head>
 <body>
@@ -110,122 +117,136 @@
     <h1>pix<b>pat</b></h1>
     <div class="tag">pixel pattern designer · png / svg</div>
 
-    <h2>Shape</h2>
-    <select id="shape">
-      <option value="square">Square</option>
-      <option value="circle">Circle</option>
-      <option value="diamond">Diamond</option>
-      <option value="cross">Cross / plus</option>
-      <option value="dot" selected>Centered dot</option>
-      <option value="custom">Custom…</option>
-    </select>
-
-    <!-- Custom shape editor -->
-    <div id="customBox" style="display:none;margin-top:6px">
-      <div class="seg five" id="customPreset" style="grid-template-columns:repeat(5,1fr)">
-        <button data-p="tri" title="Triangle">▲</button>
-        <button data-p="tri2" title="Two triangles (up + down)">▲▼</button>
-        <button data-p="bar" title="Rectangular bar">▬</button>
-        <button data-p="hex" title="Hexagon">⬣</button>
-        <button data-p="houndstooth" title="Houndstooth">▦</button>
+    <div class="section">
+      <h2>Presets</h2>
+      <select id="presetList" title="Pick a preset to load"></select>
+      <div class="seg two" style="margin-top:6px">
+        <button id="presetSave">Save current</button>
+        <button id="presetDelete" class="danger">Delete</button>
       </div>
-      <div class="row" style="margin-top:6px"><label>Angle</label>
-        <input id="customAngle" type="range" min="-180" max="180" value="0" step="1">
-        <input class="v" id="customAngleV" type="number" min="-180" max="180" step="1"></div>
-      <canvas id="shapeEd" width="240" height="240"
-        style="width:100%;aspect-ratio:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-top:6px;display:block;cursor:crosshair"></canvas>
-      <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.35">
-        Click to add a vertex · drag to move · dbl-click to remove · <b id="vCount" style="color:var(--text)">0</b> vertices
+      <!-- Download / Import are hidden for now; the wiring is still active so
+           we can re-enable them later with display:flex. -->
+      <div class="seg two" id="presetIO" style="display:none">
+        <button id="presetExport">Download .json</button>
+        <button id="presetImport">Import .json</button>
+      </div>
+      <input id="presetFile" type="file" accept=".json,application/json" style="display:none">
+    </div>
+
+    <div class="section">
+      <h2>Shape</h2>
+      <select id="shape">
+        <option value="square">Square</option>
+        <option value="circle">Circle</option>
+        <option value="diamond">Diamond</option>
+        <option value="cross">Cross / plus</option>
+        <option value="dot" selected>Centered dot</option>
+        <option value="custom">Custom…</option>
+      </select>
+
+      <!-- Custom shape editor -->
+      <div id="customBox" style="display:none;margin-top:6px">
+        <div class="seg five" id="customPreset" style="grid-template-columns:repeat(5,1fr)">
+          <button data-p="tri" title="Triangle">▲</button>
+          <button data-p="tri2" title="Two triangles (up + down)">▲▼</button>
+          <button data-p="bar" title="Rectangular bar">▬</button>
+          <button data-p="hex" title="Hexagon">⬣</button>
+          <button data-p="houndstooth" title="Houndstooth">▦</button>
+        </div>
+        <div class="row" style="margin-top:6px"><label>Angle</label>
+          <input id="customAngle" type="range" min="-180" max="180" value="0" step="1">
+          <input class="v" id="customAngleV" type="number" min="-180" max="180" step="1"></div>
+        <canvas id="shapeEd" width="240" height="240"
+          style="width:100%;aspect-ratio:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-top:6px;display:block;cursor:crosshair"></canvas>
+        <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.35">
+          Click to add a vertex · drag to move · dbl-click to remove · <b id="vCount" style="color:var(--text)">0</b> vertices
+        </div>
+        <div class="seg two">
+          <button id="shapeClear" class="danger">Clear</button>
+          <button id="shapeClose">Toggle closed</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Tile offset</h2>
+      <select id="tileType">
+        <option value="regular" selected>Regular grid</option>
+        <option value="brick-row">Brick by row</option>
+        <option value="brick-col">Brick by column</option>
+      </select>
+      <div class="row" style="margin-top:6px"><label>Horiz. offset</label>
+        <input id="tileOffsetX" type="range" min="-1" max="1" value="0" step="0.01">
+        <input class="v" id="tileOffsetXV" type="number" min="-1" max="1" step="0.01"></div>
+      <div class="row"><label>Vert. offset</label>
+        <input id="tileOffsetY" type="range" min="-1" max="1" value="0" step="0.01">
+        <input class="v" id="tileOffsetYV" type="number" min="-1" max="1" step="0.01"></div>
+    </div>
+
+    <div class="section">
+      <h2>Geometry</h2>
+      <div class="row"><label>Scale</label>
+        <input id="scale" type="range" min="0.1" max="1" value="0.23" step="0.01">
+        <input class="v" id="scaleV" type="number" min="0.1" max="1" step="0.01"></div>
+      <div class="row"><label>Zoom</label>
+        <input id="size" type="range" min="4" max="120" value="42" step="1">
+        <input class="v" id="sizeV" type="number" min="4" max="120" step="1"></div>
+      <div class="row" id="cornerRow"><label>Round corner</label>
+        <input id="corner" type="range" min="0" max="50" value="50" step="1">
+        <input class="v" id="cornerV" type="number" min="0" max="50" step="1"></div>
+      <div class="row"><label>Jitter</label>
+        <input id="jitter" type="range" min="0" max="5" value="0" step="0.01">
+        <input class="v" id="jitterV" type="number" min="0" max="5" step="0.01"></div>
+      <div class="row"><label>Stroke</label>
+        <input id="stroke" type="range" min="0" max="6" value="0" step="0.1">
+        <input class="v" id="strokeV" type="number" min="0" max="6" step="0.1"></div>
+    </div>
+
+    <div class="section">
+      <h2>Color</h2>
+      <div class="swatch">
+        <input id="bg" type="color" value="#f1e4c9">
+        <button id="swap" class="swap" title="Swap colors">⇄</button>
+        <input id="fg" type="color" value="#0d0e10">
+      </div>
+      <label class="chk" style="margin-top:8px"><input id="fill" type="checkbox" checked> fill cells</label>
+    </div>
+
+    <div class="section">
+      <h2>Reference image</h2>
+      <input id="imgFile" type="file" accept="image/*"
+        style="width:100%;font-size:11px;color:var(--muted);background:var(--panel2);
+          border:1px solid var(--line);border-radius:6px;padding:4px 6px;cursor:pointer">
+      <!-- Per-image controls only appear once an image is loaded. -->
+      <div id="imgControls" style="display:none">
+        <div class="row" style="margin-top:6px"><label>Opacity</label>
+          <input id="imgOpacity" type="range" min="0" max="1" value="0.5" step="0.01">
+          <input class="v" id="imgOpacityV" type="number" min="0" max="1" step="0.01"></div>
+        <div class="row"><label>Scale</label>
+          <input id="imgScale" type="range" min="0.05" max="5" value="1" step="0.01">
+          <input class="v" id="imgScaleV" type="number" min="0.05" max="5" step="0.01"></div>
+        <label class="chk" style="margin-bottom:4px"><input id="imgVisible" type="checkbox" checked> visible</label>
+        <label class="chk" style="margin-bottom:4px"><input id="imgLocked" type="checkbox" checked> locked (uncheck to drag)</label>
+        <button id="imgRemove" class="danger">Remove image</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Export</h2>
+      <div class="row" style="margin-bottom:6px"><label>PNG resolution</label>
+        <select id="pngScale" style="grid-column: span 2; width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font:inherit">
+          <option value="1">1× (screen)</option>
+          <option value="2" selected>2×</option>
+          <option value="3">3×</option>
+          <option value="4">4×</option>
+          <option value="6">6×</option>
+          <option value="8">8×</option>
+        </select>
       </div>
       <div class="seg two">
-        <button id="shapeClear" class="danger">Clear</button>
-        <button id="shapeClose">Toggle closed</button>
+        <button id="png">PNG</button>
+        <button id="svg">SVG</button>
       </div>
-    </div>
-
-    <div class="row" style="margin-top:6px"><label>Tile offset</label></div>
-    <select id="tileType">
-      <option value="regular" selected>Regular grid</option>
-      <option value="brick-row">Brick by row</option>
-      <option value="brick-col">Brick by column</option>
-    </select>
-    <div class="row" style="margin-top:6px"><label>Horiz. offset</label>
-      <input id="tileOffsetX" type="range" min="-1" max="1" value="0" step="0.01">
-      <input class="v" id="tileOffsetXV" type="number" min="-1" max="1" step="0.01"></div>
-    <div class="row"><label>Vert. offset</label>
-      <input id="tileOffsetY" type="range" min="-1" max="1" value="0" step="0.01">
-      <input class="v" id="tileOffsetYV" type="number" min="-1" max="1" step="0.01"></div>
-
-    <h2>Geometry</h2>
-    <div class="row"><label>Scale</label>
-      <input id="scale" type="range" min="0.1" max="1" value="0.23" step="0.01">
-      <input class="v" id="scaleV" type="number" min="0.1" max="1" step="0.01"></div>
-    <div class="row"><label>Zoom</label>
-      <input id="size" type="range" min="4" max="120" value="42" step="1">
-      <input class="v" id="sizeV" type="number" min="4" max="120" step="1"></div>
-    <div class="row" id="cornerRow"><label>Round corner</label>
-      <input id="corner" type="range" min="0" max="50" value="50" step="1">
-      <input class="v" id="cornerV" type="number" min="0" max="50" step="1"></div>
-    <div class="row"><label>Jitter</label>
-      <input id="jitter" type="range" min="0" max="5" value="0" step="0.01">
-      <input class="v" id="jitterV" type="number" min="0" max="5" step="0.01"></div>
-    <div class="row"><label>Stroke</label>
-      <input id="stroke" type="range" min="0" max="6" value="0" step="0.1">
-      <input class="v" id="strokeV" type="number" min="0" max="6" step="0.1"></div>
-
-    <h2>Color</h2>
-    <div class="swatch">
-      <input id="bg" type="color" value="#f1e4c9">
-      <button id="swap" class="swap" title="Swap colors">⇄</button>
-      <input id="fg" type="color" value="#0d0e10">
-    </div>
-    <label class="chk" style="margin-top:8px"><input id="fill" type="checkbox" checked> fill cells</label>
-
-    <h2>Presets</h2>
-    <select id="presetList" title="Pick a preset to load"></select>
-    <div class="seg two" style="margin-top:6px">
-      <button id="presetSave">Save current</button>
-      <button id="presetDelete" class="danger">Delete</button>
-    </div>
-    <div class="seg two">
-      <button id="presetExport">Download .json</button>
-      <button id="presetImport">Import .json</button>
-    </div>
-    <input id="presetFile" type="file" accept=".json,application/json" style="display:none">
-
-    <h2>Reference image</h2>
-    <input id="imgFile" type="file" accept="image/*"
-      style="width:100%;font-size:11px;color:var(--muted);background:var(--panel2);
-        border:1px solid var(--line);border-radius:6px;padding:4px 6px;cursor:pointer">
-    <div class="row" style="margin-top:6px"><label>Opacity</label>
-      <input id="imgOpacity" type="range" min="0" max="1" value="0.5" step="0.01">
-      <input class="v" id="imgOpacityV" type="number" min="0" max="1" step="0.01"></div>
-    <div class="row"><label>Scale</label>
-      <input id="imgScale" type="range" min="0.05" max="5" value="1" step="0.01">
-      <input class="v" id="imgScaleV" type="number" min="0.05" max="5" step="0.01"></div>
-    <label class="chk" style="margin-bottom:4px"><input id="imgVisible" type="checkbox" checked> visible</label>
-    <label class="chk" style="margin-bottom:4px"><input id="imgLocked" type="checkbox" checked> locked (uncheck to drag)</label>
-    <button id="imgRemove" class="danger">Remove image</button>
-
-    <h2>View</h2>
-    <label class="chk" style="margin-bottom:6px"><input id="mute" type="checkbox"> mute attractors</label>
-    <label class="chk" style="margin-bottom:6px"><input id="hideA" type="checkbox"> hide attractors (keep effect)</label>
-    <button id="resetView">Reset zoom &amp; pan</button>
-
-    <h2>Export</h2>
-    <div class="row" style="margin-bottom:6px"><label>PNG resolution</label>
-      <select id="pngScale" style="grid-column: span 2; width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font:inherit">
-        <option value="1">1× (screen)</option>
-        <option value="2" selected>2×</option>
-        <option value="3">3×</option>
-        <option value="4">4×</option>
-        <option value="6">6×</option>
-        <option value="8">8×</option>
-      </select>
-    </div>
-    <div class="seg two">
-      <button id="png">PNG</button>
-      <button id="svg">SVG</button>
     </div>
   </aside>
 
@@ -241,43 +262,58 @@
     <h1>Attractors</h1>
     <div class="tag">each attractor has independent settings</div>
 
-    <h2>Tool <span id="selPill" class="pill">none selected</span></h2>
-    <div class="seg" id="atool" style="grid-template-columns:repeat(4,1fr)">
-      <button data-t="point" class="on">Point</button>
-      <button data-t="ellipse">Ellipse</button>
-      <button data-t="pen">Pen</button>
-      <button data-t="gradient">Grad</button>
-    </div>
-    <label class="chk" style="margin-top:6px"><input id="lockAdd" type="checkbox"> lock — clicks won't create new attractors</label>
-
-    <h2>Mode</h2>
-    <div class="seg" id="amode" style="grid-template-columns:repeat(3,1fr)">
-      <button data-m="scale" class="on">scale</button>
-      <button data-m="hole">hole</button>
-      <button data-m="halftone" title="Cells grow toward the attractor up to the grid slot — never overlap">halftone</button>
+    <div class="section">
+      <h2>Tool <span id="selPill" class="pill">none selected</span></h2>
+      <div class="seg" id="atool" style="grid-template-columns:repeat(4,1fr)">
+        <button data-t="point" class="on">Point</button>
+        <button data-t="ellipse">Ellipse</button>
+        <button data-t="pen">Pen</button>
+        <button data-t="gradient">Grad</button>
+      </div>
+      <label class="chk" style="margin-top:6px"><input id="lockAdd" type="checkbox"> lock — clicks won't create new attractors</label>
     </div>
 
-    <h2>Values</h2>
-    <div class="row"><label>Strength</label>
-      <input id="aStrength" type="range" min="-1" max="1" value="-1" step="0.01">
-      <input class="v" id="aStrengthV" type="number" min="-1" max="1" step="0.01"></div>
-    <div class="row"><label>Radius</label>
-      <input id="aFalloff" type="range" min="20" max="1200" value="420" step="2">
-      <input class="v" id="aFalloffV" type="number" min="20" max="1200" step="2"></div>
-    <div class="row"><label>Pull</label>
-      <input id="aPull" type="range" min="-1" max="1" value="0" step="0.01">
-      <input class="v" id="aPullV" type="number" min="-1" max="1" step="0.01"></div>
-    <button id="resetMag" style="margin-top:-2px" title="Reset magnetic anchor to the geometry centroid">↻ reset magnet to centroid</button>
-    <div class="row"><label>Curve</label>
-      <input id="aCurve" type="range" min="0.3" max="4" value="1.7" step="0.05">
-      <input class="v" id="aCurveV" type="number" min="0.3" max="4" step="0.05"></div>
+    <div class="section">
+      <h2>View</h2>
+      <label class="chk" style="margin-bottom:6px"><input id="mute" type="checkbox"> mute attractors</label>
+      <label class="chk" style="margin-bottom:6px"><input id="hideA" type="checkbox"> hide attractors (keep effect)</label>
+      <button id="resetView">Reset zoom &amp; pan</button>
+    </div>
 
-    <h2>List</h2>
-    <div id="aList" class="aList"></div>
+    <div class="section">
+      <h2>Mode</h2>
+      <div class="seg" id="amode" style="grid-template-columns:repeat(3,1fr)">
+        <button data-m="scale" class="on">scale</button>
+        <button data-m="hole">hole</button>
+        <button data-m="halftone" title="Cells grow toward the attractor up to the grid slot — never overlap">halftone</button>
+      </div>
+    </div>
 
-    <div style="margin-top:10px">
-      <button id="closePath">Close pen path</button>
-      <button id="clearA" class="danger">Clear all attractors</button>
+    <div class="section">
+      <h2>Values</h2>
+      <div class="row"><label>Strength</label>
+        <input id="aStrength" type="range" min="-1" max="1" value="-1" step="0.01">
+        <input class="v" id="aStrengthV" type="number" min="-1" max="1" step="0.01"></div>
+      <div class="row"><label>Radius</label>
+        <input id="aFalloff" type="range" min="20" max="1200" value="420" step="2">
+        <input class="v" id="aFalloffV" type="number" min="20" max="1200" step="2"></div>
+      <div class="row"><label>Pull</label>
+        <input id="aPull" type="range" min="-1" max="1" value="0" step="0.01">
+        <input class="v" id="aPullV" type="number" min="-1" max="1" step="0.01"></div>
+      <button id="resetMag" style="margin-top:-2px" title="Reset magnetic anchor to the geometry centroid">↻ reset magnet to centroid</button>
+      <div class="row"><label>Curve</label>
+        <input id="aCurve" type="range" min="0.3" max="4" value="1.7" step="0.05">
+        <input class="v" id="aCurveV" type="number" min="0.3" max="4" step="0.05"></div>
+    </div>
+
+    <div class="section">
+      <h2>List</h2>
+      <div id="aList" class="aList"></div>
+
+      <div style="margin-top:10px">
+        <button id="closePath">Close pen path</button>
+        <button id="clearA" class="danger">Clear all attractors</button>
+      </div>
     </div>
   </aside>
 </div>
@@ -1594,6 +1630,7 @@ $('imgFile').addEventListener('change', e => {
     $('imgVisible').checked = true;
     $('imgScale').value = k;
     $('imgScaleV').value = k.toFixed(2);
+    $('imgControls').style.display = '';
     draw();
   };
   img.onerror = () => { URL.revokeObjectURL(url); alert('Could not load that image.'); };
@@ -1645,6 +1682,7 @@ $('imgLocked').addEventListener('change',  e => { S.image.locked  = e.target.che
 $('imgRemove').addEventListener('click', () => {
   S.image.el = null; S.image.x = S.image.y = S.image.w = S.image.h = 0;
   $('imgFile').value = '';
+  $('imgControls').style.display = 'none';
   draw();
 });
 
