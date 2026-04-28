@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5.1 — pixel pattern designer</title>
+<title>pixpat v1.5.2 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#0d0e10; --panel:#16181c; --panel2:#1c1f25; --line:#2a2e36;
@@ -169,8 +169,8 @@
         <summary>Edit shape</summary>
         <div class="body" id="customBox">
           <div class="row" style="margin:0"><label>Angle</label>
-            <input id="customAngle" type="range" min="-180" max="180" value="0" step="1">
-            <input class="v" id="customAngleV" type="number" min="-180" max="180" step="1"></div>
+            <input id="customAngle" type="range" min="0" max="180" value="0" step="1">
+            <input class="v" id="customAngleV" type="number" min="0" max="180" step="1"></div>
           <canvas id="shapeEd" width="240" height="240"
             style="width:100%;aspect-ratio:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-top:6px;display:block;cursor:crosshair"></canvas>
           <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.35">
@@ -324,7 +324,8 @@
       <div class="row"><label>Pull</label>
         <input id="aPull" type="range" min="-1" max="1" value="0" step="0.01">
         <input class="v" id="aPullV" type="number" min="-1" max="1" step="0.01"></div>
-      <button id="resetMag" style="margin-top:-2px" title="Reset magnetic anchor to the geometry centroid">↻ reset magnet to centroid</button>
+      <label class="chk" style="margin-top:4px"><input id="aMagLock" type="checkbox" checked> magnet locked to center</label>
+      <button id="resetMag" style="margin-top:-2px" title="Reset magnetic anchor to the geometry centroid">↻ reset magnet to center</button>
       <div class="row"><label>Curve</label>
         <input id="aCurve" type="range" min="0.3" max="4" value="1.7" step="0.05">
         <input class="v" id="aCurveV" type="number" min="0.3" max="4" step="0.05"></div>
@@ -381,7 +382,7 @@ const S = {
   muteAttractors:false, hideAttractors:false,
   zoom:1, panX:0, panY:0,
   w:0, h:0, dpr:Math.min(2, devicePixelRatio||1),
-  spaceDown:false,
+  spaceDown:false, shiftDown:false,
   history:[], redo:[], lastWheelPushAt:0,
   // Reference image (drawn above the pixel grid). Lives outside the snapshot
   // pipeline since the loaded image element + binary data don't belong in
@@ -453,6 +454,19 @@ function viewBounds(){
 }
 
 // ---------- distance helpers ----------
+// Quantise the direction from `from` to `to` to the nearest multiple of
+// `stepDeg` while preserving the distance — used for the pen tool's
+// shift-snap (the "next click is straight / 45° / perpendicular to the
+// previous one" behaviour you get in Illustrator).
+function snapToAxisStep(from, to, stepDeg){
+  const dx = to[0] - from[0], dy = to[1] - from[1];
+  const len = Math.hypot(dx, dy);
+  if(len < 1e-6) return [from[0], from[1]];
+  const step = stepDeg * Math.PI / 180;
+  const snapped = Math.round(Math.atan2(dy, dx) / step) * step;
+  return [from[0] + Math.cos(snapped) * len, from[1] + Math.sin(snapped) * len];
+}
+
 function distToSeg(px,py, ax,ay, bx,by){
   const dx=bx-ax, dy=by-ay;
   const l2 = dx*dx+dy*dy;
@@ -597,6 +611,9 @@ function attractorCentroid(a){
   return [a.x, a.y];
 }
 function magPoint(a){
+  // When the magnet is locked to the centroid (default), the anchor always
+  // tracks the shape's geometric center even as the geometry changes.
+  if(a.magLocked !== false){ return attractorCentroid(a); }
   if(!a.mag){ a.mag = attractorCentroid(a); }
   return a.mag;
 }
@@ -982,10 +999,10 @@ function drawAttractors(){
       ctx.beginPath(); ctx.arc(a.x, a.y, 4/S.zoom, 0, TAU); ctx.fill();
     }
 
-    // Magnetic-anchor handle (visible on the selected attractor only).
-    // White-filled ring + crosshair, in accent color, so it reads as a
-    // distinct draggable target from the regular geometry handles.
-    if(sel){
+    // Magnetic-anchor handle (visible on the selected attractor only,
+    // and only when the magnet is unlocked from the centroid — otherwise
+    // there is nothing to drag because the anchor tracks geometry).
+    if(sel && a.magLocked === false){
       const m = magPoint(a);
       const rOuter = 6/S.zoom, rInner = 3/S.zoom, arm = 8/S.zoom;
       ctx.globalAlpha = 1;
@@ -1032,10 +1049,14 @@ function drawDraft(){
   // dashed preview from last node to cursor
   if(nodes.length){
     const last = nodes[nodes.length-1];
+    let target = [S.mouseW[0], S.mouseW[1]];
+    // Mirror the shift-snap from the click handler so the preview line
+    // shows where the next vertex will actually land.
+    if(S.shiftDown) target = snapToAxisStep(last.p, target, 45);
     ctx.setLineDash([6/S.zoom, 4/S.zoom]);
     ctx.beginPath();
     ctx.moveTo(last.p[0]+last.hOut[0], last.p[1]+last.hOut[1]);
-    ctx.lineTo(S.mouseW[0], S.mouseW[1]);
+    ctx.lineTo(target[0], target[1]);
     ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -1391,7 +1412,7 @@ function makeCirclePts(r, n){
 }
 const SHAPE_PRESETS = {
   square:  { closed:true, pts:[[-0.5,-0.5],[0.5,-0.5],[0.5,0.5],[-0.5,0.5]] },
-  circle:  { closed:true, pts: makeCirclePts(0.5, 32) },
+  circle:  { closed:true, pts: makeCirclePts(0.5, 16) },
   diamond: { closed:true, pts:[[0,-0.5],[0.5,0],[0,0.5],[-0.5,0]] },
   cross:   { closed:true, pts:[
     [-0.16,-0.5],[0.16,-0.5],[0.16,-0.16],[0.5,-0.16],
@@ -1464,7 +1485,13 @@ function rotateCustomPtsBy(deltaDeg){
   });
 }
 function applyCustomAngle(v){
-  v = clamp(v, -180, 180);
+  v = clamp(v, 0, 180);
+  // Soft-snap to common rotations when the user drags within 2° of them so
+  // 90° / 45° clicks lock cleanly without giving up fine control elsewhere.
+  const snaps = [0, 45, 90, 135, 180];
+  for(const s of snaps){
+    if(Math.abs(v - s) <= 2){ v = s; break; }
+  }
   const delta = v - (S.customAngle || 0);
   rotateCustomPtsBy(delta);
   S.customAngle = v;
@@ -1767,6 +1794,19 @@ $('resetMag').addEventListener('click', () => {
   if(!a) return;
   pushHistory();
   a.mag = attractorCentroid(a);
+  a.magLocked = true;                    // re-lock so the anchor tracks geometry again
+  $('aMagLock').checked = true;
+  draw();
+});
+$('aMagLock').addEventListener('change', e => {
+  if(S.selected<0) return;
+  const a = S.attractors[S.selected];
+  if(!a) return;
+  pushHistory();
+  a.magLocked = e.target.checked;
+  // When unlocking, freeze the anchor at its current centroid so dragging
+  // starts from where it visually was rather than jumping somewhere stale.
+  if(!a.magLocked) a.mag = attractorCentroid(a);
   draw();
 });
 
@@ -1843,11 +1883,23 @@ function renderAList(){
 
     if(a.muted) el.classList.add('muted');
     el.appendChild(name); el.appendChild(mute); el.appendChild(dup); el.appendChild(x);
+    // Clicking the row body — including the name input itself — selects the
+    // attractor. The browser focuses the input naturally on a direct click,
+    // and selectAttractor uses updateAListSelection (no DOM rebuild) so the
+    // input keeps focus and the rename is one click away.
     el.addEventListener('click', ev => {
-      if(ev.target === name || ev.target === mute || ev.target === dup || ev.target === x) return;
+      if(ev.target === mute || ev.target === dup || ev.target === x) return;
       selectAttractor(i); draw();
     });
     list.appendChild(el);
+  });
+}
+
+// Toggle the .on class on existing list items without rebuilding the DOM.
+// Lets selectAttractor change selection while a name input keeps focus.
+function updateAListSelection(){
+  document.querySelectorAll('#aList .aItem').forEach((el, i) => {
+    el.classList.toggle('on', i === S.selected);
   });
 }
 
@@ -1899,6 +1951,8 @@ function selectAttractor(i){
     $('aCurve').value    = a.curve;    $('aCurveV').value    = a.curve.toFixed(2);
     document.querySelectorAll('#amode button').forEach(b =>
       b.classList.toggle('on', b.dataset.m === a.mode));
+    // Magnet centroid lock state — default true if missing (legacy attractors).
+    $('aMagLock').checked = a.magLocked !== false;
     // Ellipse-only Size control: show + sync to current rx/ry average.
     const ellipseRow = $('ellipseSizeRow');
     if(a.type === 'ellipse'){
@@ -1914,7 +1968,9 @@ function selectAttractor(i){
     $('ellipseSizeRow').style.display = 'none';
   }
   updateSelPill();
-  renderAList();
+  // Light-touch update — preserve any active rename input by leaving the
+  // existing DOM in place and only flipping the .on class.
+  updateAListSelection();
 }
 
 // Re-sync the Size slider when the user reshapes the selected ellipse via
@@ -1937,7 +1993,7 @@ function commitDraft(closed){
   pushHistory();
   const newPen = {
     type:'pen', nodes:S.draft.nodes, r:S.aFalloff, pull:S.aPull||0, closed:!!closed,
-    mode:S.aMode, strength:S.aStrength, curve:S.aCurve
+    mode:S.aMode, strength:S.aStrength, curve:S.aCurve, magLocked:true
   };
   newPen.mag = attractorCentroid(newPen);
   S.attractors.push(newPen);
@@ -1960,7 +2016,7 @@ function pickAttractor(wx, wy, tolPx){
   const tol = tolPx / S.zoom;
   // Mag handle on the selected attractor wins over everything else (it's
   // drawn on top and is the smallest target — easy to lose otherwise).
-  if(S.selected>=0 && S.attractors[S.selected]){
+  if(S.selected>=0 && S.attractors[S.selected] && S.attractors[S.selected].magLocked === false){
     const selA = S.attractors[S.selected];
     const m = magPoint(selA);
     const dM = Math.hypot(m[0]-wx, m[1]-wy);
@@ -2181,7 +2237,7 @@ cnv.addEventListener('mousedown', e => {
   // Magnetic anchor on the selected attractor wins over every tool.
   // pickAttractor already returns vertex:'mag' as the highest-priority hit,
   // but we re-check explicitly so the pen tool's special branches don't swallow it.
-  if(S.selected>=0 && S.attractors[S.selected]){
+  if(S.selected>=0 && S.attractors[S.selected] && S.attractors[S.selected].magLocked === false){
     const selA = S.attractors[S.selected];
     const m = magPoint(selA);
     const dM = Math.hypot(m[0]-wx, m[1]-wy);
@@ -2227,7 +2283,14 @@ cnv.addEventListener('mousedown', e => {
         const [fx,fy] = S.draft.nodes[0].p;
         if(Math.hypot(wx-fx, wy-fy)*S.zoom < 12){ commitDraft(true); return; }
       }
-      S.draft.nodes.push({ p:[wx,wy], hIn:[0,0], hOut:[0,0] });
+      // Shift-snap: like Illustrator's pen tool, hold Shift while clicking
+      // to constrain the new vertex's direction (relative to the previous
+      // vertex) to the nearest 45° axis.
+      let pos = [wx, wy];
+      if(e.shiftKey && S.draft.nodes.length > 0){
+        pos = snapToAxisStep(S.draft.nodes[S.draft.nodes.length-1].p, pos, 45);
+      }
+      S.draft.nodes.push({ p:pos, hIn:[0,0], hOut:[0,0] });
       S.draft.dragNode = S.draft.nodes.length-1; // drag to set handles
       draw();
       return;
@@ -2260,7 +2323,7 @@ cnv.addEventListener('mousedown', e => {
     } else if(!S.lockAdd){
       pushHistory();
       S.attractors.push({ type:'gradient', a:[wx,wy], b:[wx,wy], r:S.aFalloff, pull:S.aPull||0,
-        mode:S.aMode, strength:S.aStrength, curve:S.aCurve, mag:[wx,wy] });
+        mode:S.aMode, strength:S.aStrength, curve:S.aCurve, mag:[wx,wy], magLocked:true });
       const i = S.attractors.length-1;
       selectAttractor(i);
       drag = { i, vertex:1, lastX:wx, lastY:wy };
@@ -2280,7 +2343,7 @@ cnv.addEventListener('mousedown', e => {
       S.attractors.push({
         type:'ellipse', x:wx, y:wy, rx:1, ry:1, rot:0,
         r:S.aFalloff, pull:S.aPull||0, mode:S.aMode, strength:S.aStrength, curve:S.aCurve,
-        mag:[wx,wy]
+        mag:[wx,wy], magLocked:true
       });
       const i = S.attractors.length-1;
       selectAttractor(i);
@@ -2299,7 +2362,7 @@ cnv.addEventListener('mousedown', e => {
   } else if(!S.lockAdd){
     pushHistory();
     S.attractors.push({ type:'point', x:wx, y:wy, r:S.aFalloff, pull:S.aPull||0,
-      mode:S.aMode, strength:S.aStrength, curve:S.aCurve, mag:[wx,wy] });
+      mode:S.aMode, strength:S.aStrength, curve:S.aCurve, mag:[wx,wy], magLocked:true });
     selectAttractor(S.attractors.length-1);
     drag = { i:S.attractors.length-1, vertex:-1, lastX:wx, lastY:wy };
   } else return;
@@ -2552,6 +2615,10 @@ addEventListener('keydown', e => {
     }
   }
   if(e.code==='Space' && !e.repeat){ S.spaceDown = true; cnv.style.cursor='grab'; }
+  if(e.key === 'Shift' && !S.shiftDown){
+    S.shiftDown = true;
+    if(S.tool === 'pen' && S.draft) draw();   // refresh dashed preview
+  }
   if(e.code==='Enter' && S.tool==='pen' && S.draft){ commitDraft(false); }
   if(e.code==='Escape' && S.tool==='pen' && S.draft){ cancelDraft(); }
   if(!mod && (e.key==='p' || e.key==='P')){ pickTool('pen'); }
@@ -2562,6 +2629,10 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => {
   if(e.code==='Space'){ S.spaceDown = false; cnv.style.cursor='crosshair'; }
+  if(e.key === 'Shift' && S.shiftDown){
+    S.shiftDown = false;
+    if(S.tool === 'pen' && S.draft) draw();
+  }
 });
 
 function pickTool(t){
