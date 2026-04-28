@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5.2 — pixel pattern designer</title>
+<title>pixpat v1.5.3 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#0d0e10; --panel:#16181c; --panel2:#1c1f25; --line:#2a2e36;
@@ -1835,8 +1835,20 @@ function renderAList(){
     name.type = 'text';
     name.className = 'name';
     name.value = a.name || defaultName(a, i);
-    name.title = 'Click to rename';
-    name.addEventListener('pointerdown', ev => { ev.stopPropagation(); });
+    name.title = 'Double-click to rename';
+    name.readOnly = true;
+    // Single click should select the row, not focus the input. Block default
+    // focus on mousedown while read-only; the click still bubbles to the row.
+    name.addEventListener('mousedown', ev => {
+      if(name.readOnly) ev.preventDefault();
+    });
+    name.addEventListener('dblclick', ev => {
+      ev.stopPropagation();
+      name.readOnly = false;
+      name.focus();
+      name.select();
+    });
+    name.addEventListener('blur', () => { name.readOnly = true; });
     name.addEventListener('keydown', ev => {
       if(ev.key === 'Enter'){ name.blur(); }
       else if(ev.key === 'Escape'){ name.value = a.name || defaultName(a, i); name.blur(); }
@@ -1883,10 +1895,8 @@ function renderAList(){
 
     if(a.muted) el.classList.add('muted');
     el.appendChild(name); el.appendChild(mute); el.appendChild(dup); el.appendChild(x);
-    // Clicking the row body — including the name input itself — selects the
-    // attractor. The browser focuses the input naturally on a direct click,
-    // and selectAttractor uses updateAListSelection (no DOM rebuild) so the
-    // input keeps focus and the rename is one click away.
+    // Single click anywhere in the row (including the name) selects the
+    // attractor; double-click on the name enters rename mode.
     el.addEventListener('click', ev => {
       if(ev.target === mute || ev.target === dup || ev.target === x) return;
       selectAttractor(i); draw();
