@@ -210,9 +210,10 @@
     </div>
 
     <h2>Mode</h2>
-    <div class="seg two" id="amode">
+    <div class="seg" id="amode" style="grid-template-columns:repeat(3,1fr)">
       <button data-m="scale" class="on">scale</button>
       <button data-m="hole">hole</button>
+      <button data-m="halftone" title="Cells grow toward the attractor up to the grid slot — never overlap">halftone</button>
     </div>
 
     <h2>Values</h2>
@@ -422,7 +423,7 @@ function flattenEllipse(a, steps){
 }
 
 function fields(x,y){
-  const out = {scale:0, hole:0, px:0, py:0};
+  const out = {scale:0, hole:0, halftone:0, px:0, py:0};
   if(S.muteAttractors) return out;
   for(const a of S.attractors){
     if(a.muted) continue;
@@ -464,8 +465,9 @@ function fields(x,y){
       out.py += (m[1] - y) * pull * t;
     }
   }
-  out.scale = clamp(out.scale, -1, 1);
-  out.hole  = clamp(out.hole,  -1, 1);
+  out.scale    = clamp(out.scale,    -1, 1);
+  out.hole     = clamp(out.hole,     -1, 1);
+  out.halftone = clamp(out.halftone, -1, 1);
   return out;
 }
 
@@ -680,7 +682,12 @@ function drawGrid(){
       }
 
       if(hide) continue;
-      const sz = s * Math.max(0.02, scale) * sp;
+      let sz = s * Math.max(0.02, scale) * sp;
+      // Halftone mode: cells grow toward filling the grid slot (sz → s)
+      // as f.halftone → 1, with a hard cap at s — neighbours touch but
+      // never overlap. Negative values fade toward 0 instead.
+      if(f.halftone > 0)      sz = lerp(sz, s * scale, f.halftone);
+      else if(f.halftone < 0) sz = lerp(sz, 0,         -f.halftone);
       if(sz <= 0.5) continue;
       const cornerPx = corner * sz;
 
@@ -2110,7 +2117,9 @@ function renderSVGGrid(out){
         fillColor = mixHex(fillColor, S.bg, 1 - t);
       }
       if(hide) continue;
-      const sz = s*Math.max(0.02,scale)*sp;
+      let sz = s*Math.max(0.02,scale)*sp;
+      if(f.halftone > 0)      sz = lerp(sz, s * scale, f.halftone);
+      else if(f.halftone < 0) sz = lerp(sz, 0,         -f.halftone);
       if(sz<=0.5) continue;
 
       const jx = (rng()*2-1)*S.jitter*s*0.3;
