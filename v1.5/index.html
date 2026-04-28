@@ -109,6 +109,15 @@
     padding:6px 10px 10px;margin:10px 0}
   .section > h2:first-child{margin-top:6px}
   .section > h2{margin-top:8px}
+  /* Tile-offset paired controls: 4-col grid (label, slider, value, reset). */
+  .tile-offsets{display:grid;grid-template-columns:18px 1fr 52px 22px;
+    gap:4px 6px;align-items:center;margin-top:6px}
+  .tile-offsets > .lab{color:var(--muted);font-size:12px}
+  .tile-offsets > input[type=range]{min-width:0}
+  /* Shape preset icon grid */
+  .shape-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:4px}
+  .shape-grid button{margin:0;padding:6px 0;font-size:14px;line-height:1}
+  .shape-grid button.on{border-color:var(--accent);color:var(--accent);background:#1a2a25}
 </style>
 </head>
 <body>
@@ -135,31 +144,28 @@
 
     <div class="section">
       <h2>Shape</h2>
-      <select id="shape">
-        <option value="square">Square</option>
-        <option value="circle">Circle</option>
-        <option value="diamond">Diamond</option>
-        <option value="cross">Cross / plus</option>
-        <option value="dot" selected>Centered dot</option>
-        <option value="custom">Custom…</option>
-      </select>
-
-      <!-- Custom shape editor -->
-      <div id="customBox" style="display:none;margin-top:6px">
-        <div class="seg five" id="customPreset" style="grid-template-columns:repeat(5,1fr)">
-          <button data-p="tri" title="Triangle">▲</button>
-          <button data-p="tri2" title="Two triangles (up + down)">▲▼</button>
-          <button data-p="bar" title="Rectangular bar">▬</button>
-          <button data-p="hex" title="Hexagon">⬣</button>
-          <button data-p="houndstooth" title="Houndstooth">▦</button>
-        </div>
-        <div class="row" style="margin-top:6px"><label>Angle</label>
+      <!-- Every shape is a polygon preset that loads into the customPts
+           buffer; the editor below is always available for tweaks. -->
+      <div class="shape-grid" id="shapePresets">
+        <button data-p="square"      title="Square">▢</button>
+        <button data-p="circle"      title="Circle">○</button>
+        <button data-p="diamond"     title="Diamond">◇</button>
+        <button data-p="cross"       title="Cross / plus">✚</button>
+        <button data-p="dot"         title="Centered dot">•</button>
+        <button data-p="tri"         title="Triangle">▲</button>
+        <button data-p="tri2"        title="Two triangles">▲▼</button>
+        <button data-p="bar"         title="Rectangular bar">▬</button>
+        <button data-p="hex"         title="Hexagon">⬣</button>
+        <button data-p="houndstooth" title="Houndstooth">▦</button>
+      </div>
+      <div id="customBox" style="margin-top:8px">
+        <div class="row" style="margin:0"><label>Angle</label>
           <input id="customAngle" type="range" min="-180" max="180" value="0" step="1">
           <input class="v" id="customAngleV" type="number" min="-180" max="180" step="1"></div>
         <canvas id="shapeEd" width="240" height="240"
           style="width:100%;aspect-ratio:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-top:6px;display:block;cursor:crosshair"></canvas>
         <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.35">
-          Click to add a vertex · drag to move · dbl-click to remove · <b id="vCount" style="color:var(--text)">0</b> vertices
+          Click to add a vertex · drag (Ctrl: snap) · dbl-click to remove · <b id="vCount" style="color:var(--text)">0</b> vertices
         </div>
         <div class="seg two">
           <button id="shapeClear" class="danger">Clear</button>
@@ -175,21 +181,17 @@
         <option value="brick-row">Brick by row</option>
         <option value="brick-col">Brick by column</option>
       </select>
-      <!-- H / V offsets share one reset button on the right. Each row opts
-           out of the auto-reset injection via data-no-reset. -->
-      <div style="display:flex;gap:6px;align-items:stretch;margin-top:6px">
-        <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">
-          <div class="row" data-no-reset="true" style="margin:0">
-            <label style="flex:0 0 16px">H:</label>
-            <input id="tileOffsetX" type="range" min="-1" max="1" value="0" step="0.01">
-            <input class="v" id="tileOffsetXV" type="number" min="-1" max="1" step="0.01"></div>
-          <div class="row" data-no-reset="true" style="margin:0">
-            <label style="flex:0 0 16px">V:</label>
-            <input id="tileOffsetY" type="range" min="-1" max="1" value="0" step="0.01">
-            <input class="v" id="tileOffsetYV" type="number" min="-1" max="1" step="0.01"></div>
-        </div>
+      <!-- H / V offsets in a 4-column grid: label, slider, value, reset.
+           The reset button spans both rows. -->
+      <div class="tile-offsets">
+        <span class="lab">H:</span>
+        <input id="tileOffsetX" type="range" min="-1" max="1" value="0" step="0.01">
+        <input class="v" id="tileOffsetXV" type="number" min="-1" max="1" step="0.01">
         <button class="reset" id="tileXYReset" title="Reset H and V to 0"
-          style="height:auto;align-self:stretch">↻</button>
+          style="grid-row:span 2;align-self:stretch;height:auto">↻</button>
+        <span class="lab">V:</span>
+        <input id="tileOffsetY" type="range" min="-1" max="1" value="0" step="0.01">
+        <input class="v" id="tileOffsetYV" type="number" min="-1" max="1" step="0.01">
       </div>
     </div>
 
@@ -243,16 +245,17 @@
 
     <div class="section">
       <h2>Export</h2>
-      <div class="row" style="margin-bottom:6px"><label>PNG resolution</label>
-        <select id="pngScale" style="grid-column: span 2; width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font:inherit">
-          <option value="1">1× (screen)</option>
-          <option value="2" selected>2×</option>
-          <option value="3">3×</option>
-          <option value="4">4×</option>
-          <option value="6">6×</option>
-          <option value="8">8×</option>
-        </select>
-      </div>
+      <label style="color:var(--muted);font-size:12px;display:block;margin-bottom:4px">
+        PNG resolution
+      </label>
+      <select id="pngScale" style="width:100%;margin-bottom:6px">
+        <option value="1">1× (screen)</option>
+        <option value="2" selected>2×</option>
+        <option value="3">3×</option>
+        <option value="4">4×</option>
+        <option value="6">6×</option>
+        <option value="8">8×</option>
+      </select>
       <div class="seg two">
         <button id="png">PNG</button>
         <button id="svg">SVG</button>
@@ -703,73 +706,33 @@ function cellShape(ctx, cx, cy, s, rot, corner, shape){
   if(rot) ctx.rotate(rot);
   const half = s/2;
   ctx.beginPath();
-  switch(shape){
-    case 'circle':
-      ctx.arc(0,0, half, 0, TAU);
-      break;
-    case 'diamond': {
-      const pts = [[0,-half],[half,0],[0,half],[-half,0]];
-      strokePolyRounded(ctx, pts, corner);
-      break;
-    }
-    case 'cross': {
-      const tw = s * 0.32;        // arm width
-      const h = half, ht = tw/2;
-      const pts = [
-        [-ht,-h],[ht,-h],[ht,-ht],[h,-ht],[h,ht],[ht,ht],
-        [ht,h],[-ht,h],[-ht,ht],[-h,ht],[-h,-ht],[-ht,-ht]
-      ];
-      strokePolyRounded(ctx, pts, corner);
-      break;
-    }
-    case 'dot':
-      ctx.arc(0,0, half*0.45, 0, TAU);
-      break;
-    case 'custom': {
-      const pts = S.customPts;
-      if(pts.length<2){ ctx.restore(); return; }
-      // null entries mark a moveTo, so a single customPts can describe
-      // multiple disjoint sub-shapes (e.g. two triangles).
-      const subs = splitNullSubpaths(pts);
-      const cr = clamp(corner, 0, half);   // pixel radius for rounded corners
-      for(const sub of subs){
-        if(sub.length < 2) continue;
-        if(cr <= 0.5 || sub.length < 3 || !S.customClosed){
-          // sharp polyline — no rounding
-          for(let k=0;k<sub.length;k++){
-            const x = sub[k][0]*s, y = sub[k][1]*s;
-            if(k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-          }
-          if(S.customClosed) ctx.closePath();
-        } else {
-          // rounded corners via arcTo: start on the midpoint of the last
-          // edge so the first arcTo has a tangent direction to use.
-          const n = sub.length;
-          const last = sub[n-1], first = sub[0];
-          ctx.moveTo(((last[0]+first[0])/2)*s, ((last[1]+first[1])/2)*s);
-          for(let k=0;k<n;k++){
-            const cur = sub[k], nxt = sub[(k+1)%n];
-            ctx.arcTo(cur[0]*s, cur[1]*s, nxt[0]*s, nxt[1]*s, cr);
-          }
-          ctx.closePath();
-        }
+  // All shapes (including the formerly hard-coded square/circle/diamond/
+  // cross/dot) live in S.customPts now. cellShape just walks the polygon.
+  const pts = S.customPts;
+  if(!pts || pts.length<2){ ctx.restore(); return; }
+  // null entries mark a moveTo, so a single customPts can describe
+  // multiple disjoint sub-shapes (e.g. two triangles).
+  const subs = splitNullSubpaths(pts);
+  const cr = clamp(corner, 0, half);
+  for(const sub of subs){
+    if(sub.length < 2) continue;
+    if(cr <= 0.5 || sub.length < 3 || !S.customClosed){
+      for(let k=0;k<sub.length;k++){
+        const x = sub[k][0]*s, y = sub[k][1]*s;
+        if(k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
       }
-      break;
-    }
-    case 'square':
-    default: {
-      const r = clamp(corner,0,half);
-      const x = -half, y = -half, w = s, h = s;
-      if(r<=0.1){ ctx.rect(x,y,w,h); }
-      else {
-        ctx.moveTo(x+r, y);
-        ctx.arcTo(x+w, y, x+w, y+h, r);
-        ctx.arcTo(x+w, y+h, x, y+h, r);
-        ctx.arcTo(x, y+h, x, y, r);
-        ctx.arcTo(x, y, x+w, y, r);
-        ctx.closePath();
+      if(S.customClosed) ctx.closePath();
+    } else {
+      // Rounded corners via arcTo. Start mid-edge so the first arcTo has
+      // a valid tangent direction.
+      const n = sub.length;
+      const last = sub[n-1], first = sub[0];
+      ctx.moveTo(((last[0]+first[0])/2)*s, ((last[1]+first[1])/2)*s);
+      for(let k=0;k<n;k++){
+        const cur = sub[k], nxt = sub[(k+1)%n];
+        ctx.arcTo(cur[0]*s, cur[1]*s, nxt[0]*s, nxt[1]*s, cr);
       }
-      break;
+      ctx.closePath();
     }
   }
   if(S.fill) ctx.fill();
@@ -1171,13 +1134,14 @@ bindRange('aCurve','aCurve', v=>v.toFixed(2), v=>{
   if(S.selected>=0 && S.attractors[S.selected]) S.attractors[S.selected].curve = v;
 });
 
-$('shape').addEventListener('change', e => { S.shape = e.target.value; syncShapeUI(); draw(); });
-
+// Shape is no longer a select — every shape is a polygon preset chosen via
+// the icon row. See loadShapePreset() / shapePresets click handler.
 function syncShapeUI(){
-  $('customBox').style.display = S.shape==='custom' ? 'block' : 'none';
-  // Round-corner applies to every shape with corners — circle/dot ignore it.
-  $('cornerRow').style.display = '';
-  if(S.shape==='custom') drawEditor();
+  // Editor stays visible for every shape now; this hook just exists so
+  // applySnapshot/applyPresetState can call it to refresh the icon highlight
+  // and editor preview after a state load.
+  if(typeof syncShapeIcon === 'function') syncShapeIcon();
+  if(typeof drawEditor === 'function') drawEditor();
 }
 syncShapeUI();
 
@@ -1231,7 +1195,7 @@ const BUILT_IN_PRESETS = {
   "Halftone radial": {
     state: {
       shape:'square', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
-      customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
+      customPts:[[-0.5,-0.5],[0.5,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
       size:30, scale:0.25, corner:30, jitter:0, stroke:0,
       bg:'#f1e4c9', fg:'#0d0e10', fill:true,
       attractors:[{
@@ -1243,7 +1207,7 @@ const BUILT_IN_PRESETS = {
   "Diamond shrink center": {
     state: {
       shape:'diamond', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
-      customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
+      customPts:[[0,-0.5],[0.5,0],[0,0.5],[-0.5,0]], customClosed:true, customAngle:0,
       size:34, scale:0.55, corner:0, jitter:0, stroke:0,
       bg:'#0d0e10', fg:'#f1e4c9', fill:true,
       attractors:[{
@@ -1254,9 +1218,9 @@ const BUILT_IN_PRESETS = {
   },
   "Bar weave": {
     state: {
-      shape:'custom', tileType:'brick-row', tileOffsetX:0, tileOffsetY:0,
+      shape:'bar', tileType:'brick-row', tileOffsetX:0, tileOffsetY:0,
       customPts:[[-0.45,-0.1],[0.45,-0.1],[0.45,0.1],[-0.45,0.1]], customClosed:true, customAngle:0,
-      size:38, scale:0.8, corner:30, jitter:0, stroke:0,
+      size:38, scale:0.8, corner:0, jitter:0, stroke:0,
       bg:'#f1e4c9', fg:'#1f3a55', fill:true,
       attractors:[]
     }
@@ -1417,43 +1381,74 @@ document.querySelectorAll('.row').forEach(row => {
 
 // ---------- custom shape editor ----------
 const sEd = $('shapeEd'); const sCtx = sEd.getContext('2d');
-const PRESETS = {
-  tri:   { closed:true, pts:[[0,-0.5],[0.5,0.4],[-0.5,0.4]] },
-  // Two triangles, one pointing up (top half) + one pointing down (bottom half),
-  // separated by a null subpath marker so they render as two distinct polygons.
-  tri2:  { closed:true, pts:[
+// All shapes — including the formerly hard-coded square/circle/diamond/cross/
+// dot — live here as polygon presets. cellShape always renders S.customPts,
+// so picking an icon is just "load this polygon, optionally tweak vertices".
+function makeCirclePts(r, n){
+  const pts = [];
+  for(let k=0;k<n;k++){
+    const a = -Math.PI/2 + k * TAU/n;
+    pts.push([Math.cos(a)*r, Math.sin(a)*r]);
+  }
+  return pts;
+}
+const SHAPE_PRESETS = {
+  square:  { closed:true, pts:[[-0.5,-0.5],[0.5,-0.5],[0.5,0.5],[-0.5,0.5]] },
+  circle:  { closed:true, pts: makeCirclePts(0.5, 32) },
+  diamond: { closed:true, pts:[[0,-0.5],[0.5,0],[0,0.5],[-0.5,0]] },
+  cross:   { closed:true, pts:[
+    [-0.16,-0.5],[0.16,-0.5],[0.16,-0.16],[0.5,-0.16],
+    [0.5,0.16],[0.16,0.16],[0.16,0.5],[-0.16,0.5],
+    [-0.16,0.16],[-0.5,0.16],[-0.5,-0.16],[-0.16,-0.16]
+  ] },
+  dot:     { closed:true, pts: makeCirclePts(0.225, 24) },
+  tri:     { closed:true, pts:[[0,-0.5],[0.5,0.4],[-0.5,0.4]] },
+  tri2:    { closed:true, pts:[
     [0,-0.45], [-0.35,-0.05], [0.35,-0.05],
     null,
     [0, 0.45], [ 0.35, 0.05], [-0.35, 0.05]
   ] },
-  // Rectangular bar — a flat horizontal strip. Use the angle slider beneath
-  // the preset row to rotate it (or any custom shape).
-  bar:   { closed:true, pts:[
-    [-0.45,-0.1], [0.45,-0.1], [0.45,0.1], [-0.45,0.1]
-  ] },
-  hex:   { closed:true, pts:(()=>{
+  bar:     { closed:true, pts:[[-0.45,-0.1],[0.45,-0.1],[0.45,0.1],[-0.45,0.1]] },
+  hex:     { closed:true, pts:(()=>{
     const a=[]; for(let k=0;k<6;k++){ const t=-Math.PI/2 + k*TAU/6;
       a.push([Math.cos(t)*0.5, Math.sin(t)*0.5]); } return a;
   })() },
-  // Classic houndstooth "tooth" silhouette — 12-vertex polygon on a 4×4 grid,
-  // normalised to the [-0.5, 0.5] unit cell. The two diagonal edges create
-  // the characteristic broken-check teeth that tile together.
   houndstooth: { closed:true, pts:[
     [-0.5,-0.25],[-0.25,-0.25],[-0.25,-0.5],[ 0.25,-0.5],
     [ 0.00,-0.25],[ 0.50,-0.25],[ 0.50, 0.25],[ 0.25, 0.25],
     [ 0.25, 0.50],[-0.25, 0.50],[ 0.00, 0.25],[-0.50, 0.25]
   ] },
 };
-document.querySelectorAll('#customPreset button').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    const p = PRESETS[b.dataset.p]; if(!p) return;
-    S.customPts = p.pts.map(q => q === null ? null : q.slice());
-    S.customClosed = p.closed;
-    S.customAngle = 0;
-    $('customAngle').value = 0; $('customAngleV').value = 0;
-    drawEditor(); draw();
-  });
+
+function loadShapePreset(name, opts){
+  const p = SHAPE_PRESETS[name]; if(!p) return;
+  if(!opts || !opts.skipHistory) pushHistory();
+  S.shape = name;
+  S.customPts = p.pts.map(q => q === null ? null : q.slice());
+  S.customClosed = p.closed;
+  S.customAngle = 0;
+  $('customAngle').value = 0;
+  $('customAngleV').value = 0;
+  syncShapeIcon();
+  drawEditor();
+  draw();
+}
+function syncShapeIcon(){
+  document.querySelectorAll('#shapePresets button').forEach(b =>
+    b.classList.toggle('on', b.dataset.p === S.shape));
+}
+document.querySelectorAll('#shapePresets button').forEach(b=>{
+  b.addEventListener('click', () => loadShapePreset(b.dataset.p));
 });
+syncShapeIcon();
+// First boot: populate customPts from the default shape so the canvas
+// renders as the named icon rather than the legacy triangle stub.
+if(SHAPE_PRESETS[S.shape]){
+  const p = SHAPE_PRESETS[S.shape];
+  S.customPts = p.pts.map(q => q === null ? null : q.slice());
+  S.customClosed = p.closed;
+  S.customAngle = 0;
+}
 
 // Rotate the entire custom-shape (every sub-path) around the cell origin by
 // delta degrees and update S.customAngle. Used by the angle slider so the
@@ -1493,14 +1488,15 @@ function drawEditor(){
   const W = sEd.width, H = sEd.height;
   sCtx.fillStyle = '#1c1f25';
   sCtx.fillRect(0,0,W,H);
-  // grid
+  // 16x16 grid (skip center axes — drawn next in a brighter colour).
   sCtx.strokeStyle = '#2a2e36';
   sCtx.lineWidth = 1;
-  for(let i=1;i<8;i++){
+  for(let i=1;i<16;i++){
+    if(i === 8) continue;
     sCtx.beginPath();
-    sCtx.moveTo(i*W/8,0); sCtx.lineTo(i*W/8,H); sCtx.stroke();
+    sCtx.moveTo(i*W/16,0); sCtx.lineTo(i*W/16,H); sCtx.stroke();
     sCtx.beginPath();
-    sCtx.moveTo(0,i*H/8); sCtx.lineTo(W,i*H/8); sCtx.stroke();
+    sCtx.moveTo(0,i*H/16); sCtx.lineTo(W,i*H/16); sCtx.stroke();
   }
   // center cross
   sCtx.strokeStyle = '#3a4048';
@@ -1621,7 +1617,7 @@ addEventListener('mousemove', e=>{
   // Hold Ctrl while dragging to snap the dragged vertex to the editor's
   // 1/8 grid lines (matches the visible guidelines).
   if(e.ctrlKey || e.metaKey){
-    const step = 1/8;
+    const step = 1/16;
     nx = Math.round(nx/step)*step;
     ny = Math.round(ny/step)*step;
   }
@@ -2681,62 +2677,26 @@ function renderSVGGrid(out){
       const strokeA = S.stroke>0 ? ` stroke="${fillColor}"` : '';
       const t = `transform="translate(${Sx.toFixed(2)},${Sy.toFixed(2)})"`;
 
-      switch(S.shape){
-        case 'circle':
-          out.push(`<circle ${t} r="${half.toFixed(2)}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
-          break;
-        case 'diamond': {
-          const cr = corner * SS;
-          const P = [[0,-half],[half,0],[0,half],[-half,0]];
-          const d = cr > 0.5 ? roundedPolygonSVG(P, cr)
-                             : `M0 ${-half} L${half} 0 L0 ${half} L${-half} 0 Z`;
-          out.push(`<path ${t} d="${d}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
-          break;
-        }
-        case 'cross': {
-          const tt = SS*0.32, h=half, ht=tt/2;
-          const cr = corner * SS;
-          const P = [
-            [-ht,-h],[ht,-h],[ht,-ht],[h,-ht],[h,ht],[ht,ht],
-            [ht,h],[-ht,h],[-ht,ht],[-h,ht],[-h,-ht],[-ht,-ht]
-          ];
-          const d = cr > 0.5
-            ? roundedPolygonSVG(P, cr)
-            : `M${-ht} ${-h} L${ht} ${-h} L${ht} ${-ht} L${h} ${-ht} L${h} ${ht} L${ht} ${ht} L${ht} ${h} L${-ht} ${h} L${-ht} ${ht} L${-h} ${ht} L${-h} ${-ht} L${-ht} ${-ht} Z`;
-          out.push(`<path ${t} d="${d}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
-          break;
-        }
-        case 'dot':
-          out.push(`<circle ${t} r="${(half*0.45).toFixed(2)}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
-          break;
-        case 'custom': {
-          const pts = S.customPts;
-          if(pts.length<2) break;
-          const subs = splitNullSubpaths(pts);
-          const cr = clamp(corner*SS, 0, half);
-          let d = '';
-          for(const sub of subs){
-            if(sub.length < 2) continue;
-            if(cr <= 0.5 || sub.length < 3 || !S.customClosed){
-              for(let k=0;k<sub.length;k++){
-                const cmd = k===0 ? 'M' : 'L';
-                d += cmd + (sub[k][0]*SS).toFixed(2) + ' ' + (sub[k][1]*SS).toFixed(2) + ' ';
-              }
-              if(S.customClosed) d += 'Z ';
-            } else {
-              d += roundedSubpathSVG(sub, SS, cr) + ' ';
-            }
+      // Every shape exports through the shared customPts polygon path so
+      // SVG output mirrors what cellShape draws on the canvas.
+      const pts = S.customPts;
+      if(!pts || pts.length<2) continue;
+      const subs = splitNullSubpaths(pts);
+      const cr = clamp(corner*SS, 0, half);
+      let d = '';
+      for(const sub of subs){
+        if(sub.length < 2) continue;
+        if(cr <= 0.5 || sub.length < 3 || !S.customClosed){
+          for(let k=0;k<sub.length;k++){
+            const cmd = k===0 ? 'M' : 'L';
+            d += cmd + (sub[k][0]*SS).toFixed(2) + ' ' + (sub[k][1]*SS).toFixed(2) + ' ';
           }
-          out.push(`<path ${t} d="${d.trim()}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
-          break;
-        }
-        case 'square':
-        default: {
-          const r = clamp(corner*SS, 0, half);
-          out.push(`<rect ${t} x="${-half}" y="${-half}" width="${SS}" height="${SS}" rx="${r.toFixed(2)}" ry="${r.toFixed(2)}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
-          break;
+          if(S.customClosed) d += 'Z ';
+        } else {
+          d += roundedSubpathSVG(sub, SS, cr) + ' ';
         }
       }
+      if(d) out.push(`<path ${t} d="${d.trim()}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
     }
   }
 }
