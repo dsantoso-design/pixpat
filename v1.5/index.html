@@ -13,7 +13,10 @@
     font:13px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
   #app{display:grid;grid-template-columns:280px 1fr 280px;height:100%}
   aside{background:var(--panel);border-right:1px solid var(--line);
-    overflow:auto;padding:14px}
+    overflow-y:auto;overflow-x:hidden;padding:14px}
+  /* Allow flex children inside .row to shrink rather than push the sidebar
+     into horizontal scroll when a label or value is wider than expected. */
+  .row > *{min-width:0}
   aside.right{border-right:none;border-left:1px solid var(--line)}
   .aList{display:flex;flex-direction:column;gap:4px;margin-top:6px}
   .aItem{display:flex;align-items:center;gap:6px;padding:5px 8px;
@@ -185,6 +188,9 @@
     <div class="row" style="margin-top:6px"><label>Opacity</label>
       <input id="imgOpacity" type="range" min="0" max="1" value="0.5" step="0.01">
       <input class="v" id="imgOpacityV" type="number" min="0" max="1" step="0.01"></div>
+    <div class="row"><label>Scale</label>
+      <input id="imgScale" type="range" min="0.05" max="5" value="1" step="0.01">
+      <input class="v" id="imgScaleV" type="number" min="0.05" max="5" step="0.01"></div>
     <label class="chk" style="margin-bottom:4px"><input id="imgVisible" type="checkbox" checked> visible</label>
     <label class="chk" style="margin-bottom:4px"><input id="imgLocked" type="checkbox" checked> locked (uncheck to drag)</label>
     <button id="imgRemove" class="danger">Remove image</button>
@@ -230,6 +236,7 @@
       <button data-t="pen">Pen</button>
       <button data-t="gradient">Grad</button>
     </div>
+    <label class="chk" style="margin-top:6px"><input id="lockAdd" type="checkbox"> lock — clicks won't create new attractors</label>
 
     <h2>Mode</h2>
     <div class="seg" id="amode" style="grid-template-columns:repeat(3,1fr)">
@@ -307,7 +314,8 @@ const S = {
   // Reference image (drawn above the pixel grid). Lives outside the snapshot
   // pipeline since the loaded image element + binary data don't belong in
   // undo history; only its on/off + transform are user-facing controls.
-  image:{ el:null, x:0, y:0, w:0, h:0, opacity:0.5, visible:true, locked:true },
+  image:{ el:null, x:0, y:0, w:0, h:0, naturalW:0, naturalH:0, scale:1, opacity:0.5, visible:true, locked:true },
+  lockAdd:false,
 };
 
 const SNAP_KEYS = ['shape','tileType','tileOffsetX','tileOffsetY','customPts','customClosed','customAngle',
@@ -1039,11 +1047,18 @@ function bindRange(id, key, fmt=v=>v, onChange){
   const apply = (n, fromNum) => {
     if(isNaN(n)) return;
     const min = parseFloat(el.min), max = parseFloat(el.max);
+    const before = n;
     if(!isNaN(min)) n = Math.max(min, n);
     if(!isNaN(max)) n = Math.min(max, n);
     S[key] = n;
-    if(fromNum) el.value = n;
-    else v.value = fmt(n);
+    if(fromNum){
+      el.value = n;
+      // If the typed value was outside the slider's range, snap the display
+      // too so the .v field can never sit at a value the slider can't reach.
+      if(before !== n) v.value = fmt(n);
+    } else {
+      v.value = fmt(n);
+    }
     if(onChange) onChange(n);
     draw();
   };
@@ -1340,10 +1355,14 @@ $('imgFile').addEventListener('change', e => {
   img.onload = () => {
     URL.revokeObjectURL(url);
     S.image.el = img;
-    // Place centered on the current view, fit to ~60% of the smaller view dim
-    // so it's clearly visible without overflowing.
+    S.image.naturalW = img.naturalWidth;
+    S.image.naturalH = img.naturalHeight;
+    // Initial fit: ~60% of the smaller view dim so the image is clearly
+    // visible without spilling off-screen. The Scale slider tracks this
+    // factor so the user can resize from there.
     const fit = Math.min(S.w, S.h) * 0.6 / S.zoom;
-    const k = Math.min(fit / img.naturalWidth, fit / img.naturalHeight, 1);
+    const k = clamp(Math.min(fit / img.naturalWidth, fit / img.naturalHeight, 1), 0.05, 5);
+    S.image.scale = k;
     S.image.w = img.naturalWidth * k;
     S.image.h = img.naturalHeight * k;
     const [vx, vy] = screenToWorld(S.w/2, S.h/2);
@@ -1351,21 +1370,53 @@ $('imgFile').addEventListener('change', e => {
     S.image.y = vy - S.image.h/2;
     S.image.visible = true;
     $('imgVisible').checked = true;
+    $('imgScale').value = k;
+    $('imgScaleV').value = k.toFixed(2);
     draw();
   };
   img.onerror = () => { URL.revokeObjectURL(url); alert('Could not load that image.'); };
   img.src = url;
 });
+
+function setImageScale(s){
+  if(!S.image.el) return;
+  s = clamp(s, 0.05, 5);
+  // Resize about the current image center so the image stays put visually.
+  const cx = S.image.x + S.image.w/2;
+  const cy = S.image.y + S.image.h/2;
+  S.image.scale = s;
+  S.image.w = S.image.naturalW * s;
+  S.image.h = S.image.naturalH * s;
+  S.image.x = cx - S.image.w/2;
+  S.image.y = cy - S.image.h/2;
+  $('imgScale').value = s;
+  $('imgScaleV').value = s.toFixed(2);
+  draw();
+}
+$('imgScale').addEventListener('input',  e => setImageScale(parseFloat(e.target.value)));
+$('imgScaleV').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  if(isFinite(v)) setImageScale(v);
+});
+$('imgScaleV').addEventListener('change', () => {
+  $('imgScaleV').value = (S.image.scale || 1).toFixed(2);
+});
 $('imgOpacity').addEventListener('input', e => {
-  S.image.opacity = parseFloat(e.target.value);
+  S.image.opacity = clamp(parseFloat(e.target.value), 0, 1);
   $('imgOpacityV').value = S.image.opacity.toFixed(2);
   draw();
 });
 $('imgOpacityV').addEventListener('input', e => {
-  const v = clamp(parseFloat(e.target.value)||0, 0, 1);
+  const typed = parseFloat(e.target.value);
+  if(!isFinite(typed)) return;
+  const v = clamp(typed, 0, 1);
   S.image.opacity = v;
   $('imgOpacity').value = v;
+  if(typed !== v) e.target.value = v.toFixed(2);
   draw();
+});
+$('imgOpacityV').addEventListener('change', () => {
+  $('imgOpacityV').value = S.image.opacity.toFixed(2);
 });
 $('imgVisible').addEventListener('change', e => { S.image.visible = e.target.checked; draw(); });
 $('imgLocked').addEventListener('change',  e => { S.image.locked  = e.target.checked; updateHoverCursor(); });
@@ -1385,6 +1436,7 @@ $('bg').addEventListener('input', e => { S.bg = e.target.value; draw(); });
 $('fg').addEventListener('input', e => { S.fg = e.target.value; draw(); });
 $('fill').addEventListener('change', e => { S.fill = e.target.checked; draw(); });
 $('mute').addEventListener('change', e => { S.muteAttractors = e.target.checked; draw(); });
+$('lockAdd').addEventListener('change', e => { S.lockAdd = e.target.checked; });
 $('hideA').addEventListener('change', e => { S.hideAttractors = e.target.checked; draw(); });
 
 $('swap').addEventListener('click', () => {
@@ -1875,7 +1927,8 @@ cnv.addEventListener('mousedown', e => {
       draw();
       return;
     }
-    // 4) Otherwise start a new pen draft at this point
+    // 4) Otherwise start a new pen draft at this point — unless lockAdd is on.
+    if(S.lockAdd) return;
     startDraft();
     S.draft.nodes.push({ p:[wx,wy], hIn:[0,0], hOut:[0,0] });
     S.draft.dragNode = 0;
@@ -1885,28 +1938,30 @@ cnv.addEventListener('mousedown', e => {
 
   if(S.tool==='gradient'){
     const hit = pickAttractor(wx,wy, 12);
-    pushHistory();
     if(hit && S.attractors[hit.i].type==='gradient'){
+      pushHistory();
       selectAttractor(hit.i);
       drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
-    } else {
+    } else if(!S.lockAdd){
+      pushHistory();
       S.attractors.push({ type:'gradient', a:[wx,wy], b:[wx,wy], r:S.aFalloff, pull:S.aPull||0,
         mode:S.aMode, strength:S.aStrength, curve:S.aCurve, mag:[wx,wy] });
       const i = S.attractors.length-1;
       selectAttractor(i);
       drag = { i, vertex:1, lastX:wx, lastY:wy };
-    }
+    } else return;
     draw();
     return;
   }
 
   if(S.tool==='ellipse'){
     const hit = pickAttractor(wx,wy, 12);
-    pushHistory();
     if(hit && S.attractors[hit.i].type==='ellipse'){
+      pushHistory();
       selectAttractor(hit.i);
       drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
-    } else {
+    } else if(!S.lockAdd){
+      pushHistory();
       S.attractors.push({
         type:'ellipse', x:wx, y:wy, rx:1, ry:1, rot:0,
         r:S.aFalloff, pull:S.aPull||0, mode:S.aMode, strength:S.aStrength, curve:S.aCurve,
@@ -1916,22 +1971,23 @@ cnv.addEventListener('mousedown', e => {
       selectAttractor(i);
       // Creation drag: click = center; drag vector sets rx (|dx|) and ry (|dy|)
       drag = { i, vertex:'createEllipse', startX:wx, startY:wy, lastX:wx, lastY:wy };
-    }
+    } else return;
     draw();
     return;
   }
 
   const hit = pickAttractor(wx,wy, 12);
-  pushHistory();
   if(hit){
+    pushHistory();
     selectAttractor(hit.i);
     drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
-  } else {
+  } else if(!S.lockAdd){
+    pushHistory();
     S.attractors.push({ type:'point', x:wx, y:wy, r:S.aFalloff, pull:S.aPull||0,
       mode:S.aMode, strength:S.aStrength, curve:S.aCurve, mag:[wx,wy] });
     selectAttractor(S.attractors.length-1);
     drag = { i:S.attractors.length-1, vertex:-1, lastX:wx, lastY:wy };
-  }
+  } else return;
   draw();
 });
 
