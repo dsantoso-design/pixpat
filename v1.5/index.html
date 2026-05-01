@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5.4 — pixel pattern designer</title>
+<title>pixpat v1.5.5 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#0d0e10; --panel:#16181c; --panel2:#1c1f25; --line:#2a2e36;
@@ -72,7 +72,7 @@
   .seg button{margin:0;padding:5px 4px;font-size:11px}
   .seg button.on{border-color:var(--accent);color:var(--accent);background:#1a2a25}
   main{position:relative;overflow:hidden;background:#08090b}
-  canvas{display:block;width:100%;height:100%;cursor:crosshair}
+  canvas{display:block;width:100%;height:100%;cursor:default}
   #hud{position:absolute;left:12px;bottom:10px;color:var(--muted);
     font-size:11px;pointer-events:none;letter-spacing:.04em;max-width:72%;
     background:rgba(15,18,22,.82);padding:6px 10px;border-radius:6px;
@@ -266,6 +266,10 @@
         <button id="png">PNG</button>
         <button id="svg">SVG</button>
       </div>
+      <label class="chk" style="margin-top:8px;display:flex;align-items:center;gap:6px">
+        <input id="showSeed" type="checkbox"> Show 200×200 seed frame
+      </label>
+      <button id="pngSeamless" style="margin-top:4px;width:100%">Seamless PNG (200×200)</button>
     </div>
   </aside>
 
@@ -379,7 +383,7 @@ const S = {
   tool:'point', draft:null, mouseW:[0,0],
   aMode:'scale', aStrength:-1, aFalloff:420, aPull:0, aCurve:1.7, aEllipseSize:100,
   bg:'#f1e4c9', fg:'#0d0e10', fill:true,
-  muteAttractors:false, hideAttractors:false,
+  muteAttractors:false, hideAttractors:false, showSeed:false,
   zoom:1, panX:0, panY:0,
   w:0, h:0, dpr:Math.min(2, devicePixelRatio||1),
   spaceDown:false, shiftDown:false,
@@ -837,6 +841,14 @@ function draw(){
     drawAttractors();
     drawDraft();
     drawFreeTransform();
+  }
+
+  // Seed frame: a 200×200 black outline at world (0,0) showing the region the
+  // Seamless PNG export will capture. Drawn in world space so it pans/zooms.
+  if(S.showSeed && !S.hideAttractors){
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 4 / S.zoom;
+    ctx.strokeRect(0, 0, 200, 200);
   }
 
   ctx.setTransform(S.dpr,0,0,S.dpr,0,0);
@@ -2518,7 +2530,7 @@ addEventListener('mousemove', e => {
 });
 
 function updatePenCursor(){
-  if(S.tool!=='pen'){ cnv.style.cursor = 'crosshair'; return; }
+  if(S.tool!=='pen'){ cnv.style.cursor = 'default'; return; }
   if(S.draft){ cnv.style.cursor = 'crosshair'; return; }
   const hit = nearestPenHit(S.mouseW[0], S.mouseW[1], 10);
   cnv.style.cursor = hit ? 'copy' : 'crosshair';
@@ -2531,7 +2543,7 @@ function updateHoverCursor(){
   if(S.tool === 'pen'){ updatePenCursor(); return; }
   const hit = pickAttractor(S.mouseW[0], S.mouseW[1], 12);
   if(hit && hit.vertex === 'mag') cnv.style.cursor = 'move';
-  else cnv.style.cursor = hit ? 'pointer' : 'crosshair';
+  else cnv.style.cursor = hit ? 'pointer' : 'default';
 }
 
 addEventListener('mouseup', () => {
@@ -2629,7 +2641,7 @@ function pickTool(t){
   if(t!=='pen' && S.draft) cancelDraft();
   $('toolTag').classList.toggle('on', t==='pen');
   $('gradTag').classList.toggle('on', t==='gradient');
-  cnv.style.cursor = 'crosshair';
+  cnv.style.cursor = t==='pen' ? 'crosshair' : 'default';
   draw();
 }
 
@@ -2673,6 +2685,62 @@ $('png').addEventListener('click', () => {
   link.href = renderPNG(scale);
   link.click();
 });
+
+// Render a 200×200 PNG that tiles seamlessly. Each attractor is duplicated
+// onto its 8 neighbouring tiles so radial influence wraps toroidally across
+// the seam. The seed region is world coords [0,0] → [200,200].
+function renderSeamlessPNG(){
+  const W = 200, H = 200;
+  const original = S.attractors;
+  const wrapped = [];
+  for(const a of original){
+    for(let dy=-1; dy<=1; dy++){
+      for(let dx=-1; dx<=1; dx++){
+        if(dx===0 && dy===0){ wrapped.push(a); continue; }
+        const c = JSON.parse(JSON.stringify(a));
+        delete c._flat;
+        offsetAttractor(c, dx*W, dy*H);
+        wrapped.push(c);
+      }
+    }
+  }
+
+  const off = document.createElement('canvas');
+  off.width = W; off.height = H;
+  const offCtx = off.getContext('2d');
+
+  const o = {
+    ctx, dpr:S.dpr, panX:S.panX, panY:S.panY, zoom:S.zoom,
+    w:S.w, h:S.h, hide:S.hideAttractors, imgVis:S.image.visible,
+    showSeed:S.showSeed, attractors:original
+  };
+  ctx = offCtx;
+  S.dpr = 1; S.panX = 0; S.panY = 0; S.zoom = 1;
+  S.w = W; S.h = H;
+  S.hideAttractors = true; S.image.visible = false; S.showSeed = false;
+  S.attractors = wrapped;
+  invalidateAllFlat();
+  try {
+    draw();
+    return off.toDataURL('image/png');
+  } finally {
+    ctx = o.ctx;
+    S.dpr = o.dpr; S.panX = o.panX; S.panY = o.panY; S.zoom = o.zoom;
+    S.w = o.w; S.h = o.h;
+    S.hideAttractors = o.hide; S.image.visible = o.imgVis;
+    S.showSeed = o.showSeed;
+    S.attractors = o.attractors;
+    invalidateAllFlat();
+    draw();
+  }
+}
+$('pngSeamless').addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.download = `pixpat_${S.shape}_seamless_200_${Date.now()}.png`;
+  link.href = renderSeamlessPNG();
+  link.click();
+});
+$('showSeed').addEventListener('change', e => { S.showSeed = e.target.checked; draw(); });
 
 $('svg').addEventListener('click', () => {
   const parts = [];
