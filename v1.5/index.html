@@ -1494,6 +1494,7 @@ function loadShapePreset(name, opts){
   S.customPts = p.pts.map(q => q === null ? null : q.slice());
   S.customClosed = p.closed;
   S.customAngle = 0;
+  activeSub = -1;
   S.corner = 0;                       // every fresh shape starts crisp
   $('customAngle').value = 0;
   $('customAngleV').value = 0;
@@ -1554,6 +1555,11 @@ $('customAngle').addEventListener('input',  e => applyCustomAngle(parseFloat(e.t
 $('customAngleV').addEventListener('input', e => applyCustomAngle(parseFloat(e.target.value)||0));
 
 let edDrag = -1, edDragCorner = -1;
+// Index in customPts of the first vertex of the in-progress sub-shape started
+// by shift+click. While >=0, plain clicks append to that sub-shape (instead
+// of inserting into the nearest existing edge). Reset to -1 by clicking the
+// first vertex of the active sub-shape, by Clear, or by loading a preset.
+let activeSub = -1;
 
 // ---------- live corners (per-vertex roundness) ----------
 // A customPts entry can be [x,y] (uses global S.corner) or [x,y,r] where r
@@ -1668,11 +1674,19 @@ function drawEditor(){
     sCtx.stroke();
   }
   // vertices (skip null markers; mark each subpath's first vertex larger)
-  sCtx.fillStyle = '#7cf2c1';
   let firstOfSub = true;
-  pts.forEach(p => {
+  pts.forEach((p, k) => {
     if(p === null){ firstOfSub = true; return; }
     const [cx,cy] = edToCanvas(p[0], p[1]);
+    // Active sub-shape's first vertex gets an orange ring — click it to close.
+    if(k === activeSub){
+      sCtx.beginPath();
+      sCtx.arc(cx, cy, 8, 0, TAU);
+      sCtx.strokeStyle = '#ff7a59';
+      sCtx.lineWidth = 1.5;
+      sCtx.stroke();
+    }
+    sCtx.fillStyle = '#7cf2c1';
     sCtx.beginPath();
     sCtx.arc(cx,cy, firstOfSub ? 5 : 3.5, 0, TAU);
     sCtx.fill();
@@ -1756,17 +1770,32 @@ sEd.addEventListener('mousedown', e=>{
   }
   const hit = pickEdVertex(lx,ly);
   if(e.button===2){ // right-click remove
-    if(hit>=0){ pushHistory(); S.customPts.splice(hit,1); drawEditor(); draw(); }
+    if(hit>=0){
+      pushHistory(); S.customPts.splice(hit,1);
+      // Removing inside or before the active sub-shape can break it — bail out.
+      if(activeSub >= 0 && (hit <= activeSub || S.customPts[activeSub] === undefined || S.customPts[activeSub] === null)) activeSub = -1;
+      drawEditor(); draw();
+    }
     return;
   }
-  if(hit>=0){ edDrag = hit; return; }
-  // Shift+click on empty space starts a brand-new sub-shape. A null marker
-  // separates sub-paths in customPts; the new vertex becomes the first of
-  // the new sub-shape and the user can keep clicking to extend it.
+  // Click the first vertex of the active sub-shape to finish it.
+  if(hit >= 0 && hit === activeSub){
+    activeSub = -1;
+    drawEditor(); draw();
+    return;
+  }
+  if(hit >= 0){ edDrag = hit; return; }
   pushHistory();
   const pt = [clamp(lx,-0.5,0.5), clamp(ly,-0.5,0.5)];
   if(e.shiftKey && S.customPts.length > 0 && S.customPts[S.customPts.length-1] !== null){
+    // Shift+click starts a brand-new sub-shape. Subsequent plain clicks append
+    // to it (see branch below) until the user clicks its first vertex to close.
     S.customPts.push(null, pt);
+    activeSub = S.customPts.length - 1;
+    edDrag = activeSub;
+  } else if(activeSub >= 0){
+    // Plain click while a sub-shape is in progress: append to its end.
+    S.customPts.push(pt);
     edDrag = S.customPts.length - 1;
   } else {
     const at = nearestEdgeInsert(lx, ly);
@@ -1821,7 +1850,7 @@ $('liveCorner').addEventListener('change', e => {
   drawEditor(); draw();
 });
 $('shapeClear').addEventListener('click', ()=>{
-  S.customPts = []; drawEditor(); draw();
+  S.customPts = []; activeSub = -1; drawEditor(); draw();
 });
 $('shapeClose').addEventListener('click', ()=>{
   S.customClosed = !S.customClosed; drawEditor(); draw();
