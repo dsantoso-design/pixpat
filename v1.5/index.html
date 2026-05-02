@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5.11 — pixel pattern designer</title>
+<title>pixpat v1.5.12 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#08090c; --panel:rgba(20,22,28,.72); --panel2:#1c1f25; --line:rgba(255,255,255,.08);
@@ -240,16 +240,16 @@
       <!-- Radial-tile controls — visible only when tileType === 'radial'. -->
       <div id="radialBox" style="display:none;margin-top:6px">
         <div class="row" style="margin-top:0"><label>Spacing</label>
-          <input id="radialSpacing" type="range" min="0.3" max="3" value="1" step="0.01">
+          <input id="radialSpacing" type="range" min="0.3" max="3" value="0.82" step="0.01">
           <input class="v" id="radialSpacingV" type="number" min="0.3" max="3" step="0.01"></div>
         <div class="row"><label>Density</label>
-          <input id="radialDensity" type="range" min="0.3" max="3" value="1" step="0.01">
+          <input id="radialDensity" type="range" min="0.3" max="3" value="0.97" step="0.01">
           <input class="v" id="radialDensityV" type="number" min="0.3" max="3" step="0.01"></div>
         <div class="row"><label>Twist</label>
-          <input id="radialTwist" type="range" min="0" max="2" value="1" step="0.01">
+          <input id="radialTwist" type="range" min="0" max="2" value="0" step="0.01">
           <input class="v" id="radialTwistV" type="number" min="0" max="2" step="0.01"></div>
         <div class="row"><label>Orient</label>
-          <input id="radialOrient" type="range" min="0" max="360" value="0" step="1">
+          <input id="radialOrient" type="range" min="0" max="360" value="198" step="1">
           <input class="v" id="radialOrientV" type="number" min="0" max="360" step="1"></div>
       </div>
     </div>
@@ -430,7 +430,7 @@ function mixHex(a,b,t){
 
 const S = {
   shape:'dot', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
-  radialSpacing:1, radialDensity:1, radialTwist:1, radialOrient:0,
+  radialSpacing:0.82, radialDensity:0.97, radialTwist:0, radialOrient:198,
   customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
   size:42, scale:0.23, corner:0, stroke:0,
   attractors:[], selected:-1,
@@ -626,7 +626,17 @@ function isInsideBox(x, y, a){
   const c = Math.cos(-(a.rot||0)), s = Math.sin(-(a.rot||0));
   const lx = (x-a.x)*c - (y-a.y)*s;
   const ly = (x-a.x)*s + (y-a.y)*c;
-  return Math.abs(lx) <= a.w/2 && Math.abs(ly) <= a.h/2;
+  const hw = a.w/2, hh = a.h/2;
+  if(Math.abs(lx) > hw || Math.abs(ly) > hh) return false;
+  const cr = Math.min(a.cornerR||0, hw, hh);
+  if(cr <= 0.01) return true;
+  // Corner cut-out: in the rounded-corner region, only count as "inside" if
+  // we're within the corner arc — so the field falloff follows the rounded
+  // outline, not the rectangular AABB.
+  const ax = Math.abs(lx), ay = Math.abs(ly);
+  if(ax <= hw - cr || ay <= hh - cr) return true;
+  const dx = ax - (hw - cr), dy = ay - (hh - cr);
+  return dx*dx + dy*dy <= cr*cr;
 }
 
 function flattenEllipse(a, steps){
