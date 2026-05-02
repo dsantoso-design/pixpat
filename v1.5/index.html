@@ -2,28 +2,44 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5.8 — pixel pattern designer</title>
+<title>pixpat v1.5.9 — pixel pattern designer</title>
 <style>
   :root{
-    --bg:#0d0e10; --panel:#16181c; --panel2:#1c1f25; --line:#2a2e36;
+    --bg:#08090c; --panel:rgba(20,22,28,.72); --panel2:#1c1f25; --line:rgba(255,255,255,.08);
+    --line-strong:rgba(255,255,255,.14);
     --text:#e7e9ee; --muted:#8a909c; --accent:#7cf2c1; --warn:#ff7a59;
+    --ring:rgba(124,242,193,.18);
+    --shadow:0 18px 60px -10px rgba(0,0,0,.7), 0 4px 20px rgba(0,0,0,.4);
   }
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
-    font:13px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
-  #app{display:grid;grid-template-columns:280px 1fr 280px;height:100%}
-  aside{background:var(--panel);border-right:1px solid var(--line);
-    overflow-y:auto;overflow-x:hidden;padding:14px}
-  /* Allow flex children inside .row to shrink rather than push the sidebar
-     into horizontal scroll when a label or value is wider than expected. */
+  html,body{margin:0;height:100%;color:var(--text);
+    font:13px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:
+      radial-gradient(1200px 800px at 12% -10%, #131722 0%, transparent 60%),
+      radial-gradient(900px 700px at 100% 110%, #15201d 0%, transparent 55%),
+      #08090c;}
+  #app{position:relative;width:100vw;height:100vh;overflow:hidden}
+  /* The two side panels float above a full-bleed canvas so the design is the
+     full screen, not boxed inside a 3-column grid. */
+  aside{position:absolute;top:16px;bottom:16px;width:300px;padding:16px;
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    box-shadow:var(--shadow);backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    overflow-y:auto;overflow-x:hidden;z-index:10;
+    scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+  aside::-webkit-scrollbar{width:8px}
+  aside::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:8px}
+  aside::-webkit-scrollbar-track{background:transparent}
+  aside:not(.right){left:16px}
+  aside.right{right:16px}
   .row > *{min-width:0}
-  aside.right{border-right:none;border-left:1px solid var(--line)}
   .aList{display:flex;flex-direction:column;gap:4px;margin-top:6px}
-  .aItem{display:flex;align-items:center;gap:6px;padding:5px 8px;
-    background:var(--panel2);border:1px solid var(--line);border-radius:6px;
-    font-size:11px;cursor:pointer}
-  .aItem:hover{border-color:#3a4150}
-  .aItem.on{border-color:var(--accent);background:#1a2a25;color:var(--accent)}
+  .aItem{display:flex;align-items:center;gap:6px;padding:6px 8px;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;
+    font-size:11px;cursor:pointer;transition:background .12s, border-color .12s}
+  .aItem:hover{border-color:var(--line-strong);background:rgba(255,255,255,.06)}
+  .aItem.on{border-color:var(--accent);color:var(--accent);
+    background:linear-gradient(180deg,rgba(124,242,193,.12),rgba(124,242,193,.04))}
   .aItem .name{flex:1;min-width:0;background:transparent;border:1px solid transparent;
     color:inherit;font:inherit;font-size:11px;padding:2px 4px;border-radius:3px;
     overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -41,51 +57,61 @@
   .aItem .mute:hover{border-color:var(--accent)}
   .aItem.muted .name{color:var(--muted);text-decoration:line-through}
   .empty{color:var(--muted);font-size:11px;padding:8px 0;font-style:italic}
-  aside h1{font-size:13px;letter-spacing:.12em;text-transform:uppercase;
-    color:var(--muted);margin:0 0 4px;font-weight:600}
-  aside h1 b{color:var(--accent);font-weight:700;letter-spacing:.06em}
-  aside .tag{color:var(--muted);font-size:11px;margin:0 0 10px}
-  aside h2{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
-    color:var(--muted);margin:18px 0 8px;font-weight:600}
+  aside h1{font-size:18px;letter-spacing:-.01em;text-transform:none;
+    color:var(--text);margin:0 0 2px;font-weight:600;display:flex;align-items:center;gap:6px}
+  aside h1 b{color:var(--accent);font-weight:600}
+  aside h1::before{content:'';width:6px;height:6px;border-radius:50%;
+    background:var(--accent);box-shadow:0 0 12px var(--accent)}
+  aside .tag{color:var(--muted);font-size:11px;margin:0 0 12px;letter-spacing:.02em}
+  aside h2{font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin:14px 0 8px;font-weight:600}
   .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}
   .row label{color:var(--muted);font-size:12px;flex:1}
   .row .v{color:var(--text);font-variant-numeric:tabular-nums;
     font-size:11px;min-width:44px;text-align:right}
   .row input.v{width:52px;min-width:52px;flex:0 0 52px;
-    background:var(--panel2);border:1px solid var(--line);border-radius:4px;
-    padding:2px 5px;font:inherit;font-size:11px;color:var(--text);
+    background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:6px;
+    padding:3px 6px;font:inherit;font-size:11px;color:var(--text);
     font-variant-numeric:tabular-nums;text-align:right;
-    appearance:textfield;-moz-appearance:textfield}
-  .row input.v:focus{outline:none;border-color:var(--accent)}
+    appearance:textfield;-moz-appearance:textfield;transition:border-color .12s}
+  .row input.v:focus{outline:none;border-color:var(--accent);background:rgba(0,0,0,.35)}
   .row input.v::-webkit-outer-spin-button,
   .row input.v::-webkit-inner-spin-button{-webkit-appearance:none;appearance:none;margin:0}
   input[type=range]{flex:1.4;accent-color:var(--accent);background:transparent}
-  select,button{background:var(--panel2);color:var(--text);border:1px solid var(--line);
-    border-radius:6px;padding:6px 8px;font:inherit;cursor:pointer}
+  select,button{background:rgba(255,255,255,.04);color:var(--text);
+    border:1px solid var(--line);border-radius:8px;padding:7px 10px;
+    font:inherit;cursor:pointer;transition:background .12s ease, border-color .12s ease, color .12s ease}
   select{width:100%}
   button{width:100%;margin-top:6px}
-  button:hover{border-color:var(--accent);color:var(--accent)}
+  button:hover{background:rgba(255,255,255,.07);border-color:var(--line-strong);color:var(--accent)}
   button.danger:hover{border-color:var(--warn);color:var(--warn)}
   .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:4px}
   .seg.two{grid-template-columns:repeat(2,1fr)}
   .seg.five{grid-template-columns:repeat(5,1fr)}
-  .seg button{margin:0;padding:5px 4px;font-size:11px}
-  .seg button.on{border-color:var(--accent);color:var(--accent);background:#1a2a25}
-  main{position:relative;overflow:hidden;background:#08090b}
+  .seg button{margin:0;padding:6px 4px;font-size:11px;border-radius:7px}
+  .seg button.on{border-color:var(--accent);color:var(--accent);
+    background:linear-gradient(180deg,rgba(124,242,193,.14),rgba(124,242,193,.06));
+    box-shadow:inset 0 0 0 1px rgba(124,242,193,.15)}
+  main{position:absolute;inset:0;overflow:hidden;background:transparent}
   canvas{display:block;width:100%;height:100%;cursor:default}
-  #hud{position:absolute;left:12px;bottom:10px;color:var(--muted);
-    font-size:11px;pointer-events:none;letter-spacing:.04em;max-width:72%;
-    background:rgba(15,18,22,.82);padding:6px 10px;border-radius:6px;
-    border:1px solid var(--line);backdrop-filter:blur(4px)}
+  /* HUD chips float bottom-center so the floating panels don't crowd them.
+     Center the cluster between the two side panels. */
+  #hud{position:absolute;left:50%;transform:translateX(-50%);bottom:16px;color:var(--muted);
+    font-size:11px;pointer-events:none;letter-spacing:.04em;max-width:60vw;text-align:center;
+    background:var(--panel);padding:8px 14px;border-radius:10px;
+    border:1px solid var(--line);backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow);z-index:5}
   #hud b{color:var(--text);font-weight:500}
-  #zoomTag{position:absolute;right:12px;bottom:10px;color:var(--muted);
+  #zoomTag{position:absolute;right:332px;bottom:16px;color:var(--muted);
     font-size:11px;font-variant-numeric:tabular-nums;pointer-events:none;
-    background:rgba(15,18,22,.82);padding:6px 10px;border-radius:6px;
-    border:1px solid var(--line);backdrop-filter:blur(4px)}
-  #toolTag,#gradTag{position:absolute;left:12px;top:10px;color:var(--accent);
-    font-size:11px;letter-spacing:.06em;pointer-events:none;
-    background:rgba(15,18,22,.7);padding:3px 8px;border-radius:4px;
-    border:1px solid var(--line);display:none}
+    background:var(--panel);padding:8px 12px;border-radius:10px;
+    border:1px solid var(--line);backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow);z-index:5}
+  #toolTag,#gradTag{position:absolute;left:332px;top:16px;color:var(--accent);
+    font-size:11px;letter-spacing:.08em;pointer-events:none;
+    background:var(--panel);padding:6px 12px;border-radius:10px;
+    border:1px solid var(--ring);backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow);display:none;z-index:5}
   #toolTag.on,#gradTag.on{display:block}
   .swatch{display:flex;gap:6px;margin-top:4px;align-items:stretch}
   .swatch input[type=color]{flex:1;height:30px;background:var(--panel2);
@@ -104,27 +130,29 @@
   .row button.reset:hover{border-color:var(--accent);color:var(--accent)}
   /* Each functional group (Shape, Color, Tool, etc.) sits inside its own
      low-opacity 'island' so the panels read as a stack of cards. */
-  .section{background:rgba(255,255,255,0.03);
-    border:1px solid rgba(255,255,255,0.05);border-radius:8px;
-    padding:6px 10px 10px;margin:10px 0}
+  .section{background:rgba(255,255,255,.025);
+    border:1px solid rgba(255,255,255,.05);border-radius:12px;
+    padding:8px 12px 12px;margin:10px 0;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
   .section > h2:first-child{margin-top:6px}
   .section > h2{margin-top:8px}
-  /* Shape preset icon grid */
   .shape-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:4px}
-  .shape-grid button{margin:0;padding:6px 0;font-size:14px;line-height:1}
-  .shape-grid button.on{border-color:var(--accent);color:var(--accent);background:#1a2a25}
-  /* Collapsible sub-sections (used for H/V offsets, the shape editor, etc.). */
+  .shape-grid button{margin:0;padding:7px 0;font-size:14px;line-height:1;border-radius:7px}
+  .shape-grid button.on{border-color:var(--accent);color:var(--accent);
+    background:linear-gradient(180deg,rgba(124,242,193,.14),rgba(124,242,193,.06));
+    box-shadow:inset 0 0 0 1px rgba(124,242,193,.15)}
   details.fold{margin-top:6px}
   details.fold > summary{cursor:pointer;list-style:none;
-    background:var(--panel2);border:1px solid var(--line);border-radius:6px;
-    padding:5px 8px;color:var(--muted);font-size:11px;letter-spacing:.06em;
+    background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:8px;
+    padding:6px 10px;color:var(--muted);font-size:10px;letter-spacing:.12em;
     text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;
-    user-select:none}
+    user-select:none;transition:border-color .12s ease,color .12s ease}
   details.fold > summary::-webkit-details-marker{display:none}
   details.fold > summary::after{content:'▾';color:var(--muted);transition:transform .15s}
-  details.fold[open] > summary{color:var(--accent);border-color:var(--accent)}
+  details.fold > summary:hover{color:var(--text);border-color:var(--line-strong)}
+  details.fold[open] > summary{color:var(--accent);border-color:var(--ring)}
   details.fold[open] > summary::after{transform:rotate(180deg);color:var(--accent)}
-  details.fold > .body{padding-top:6px}
+  details.fold > .body{padding-top:8px}
 </style>
 </head>
 <body>
@@ -227,9 +255,9 @@
     <div class="section">
       <h2>Color</h2>
       <div class="swatch">
-        <input id="bg" type="color" value="#f1e4c9">
+        <input id="bg" type="color" value="#0d0e10">
         <button id="swap" class="swap" title="Swap colors">⇄</button>
-        <input id="fg" type="color" value="#0d0e10">
+        <input id="fg" type="color" value="#e7e9ee">
       </div>
       <label class="chk" style="margin-top:8px"><input id="fill" type="checkbox" checked> fill cells</label>
     </div>
@@ -383,7 +411,7 @@ const S = {
   attractors:[], selected:-1,
   tool:'point', draft:null, mouseW:[0,0],
   aMode:'scale', aStrength:-1, aFalloff:420, aPull:0, aCurve:1.7, aEllipseSize:100,
-  bg:'#f1e4c9', fg:'#0d0e10', fill:true,
+  bg:'#0d0e10', fg:'#e7e9ee', fill:true,
   muteAttractors:false, hideAttractors:false, liveCorner:false,
   zoom:1, panX:0, panY:0,
   w:0, h:0, dpr:Math.min(2, devicePixelRatio||1),
