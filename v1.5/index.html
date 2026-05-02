@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5.13 — pixel pattern designer</title>
+<title>pixpat v1.5.14 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#08090c; --panel:rgba(20,22,28,.72); --panel2:#1c1f25; --line:rgba(255,255,255,.08);
@@ -156,23 +156,6 @@
   details.fold[open] > summary{color:var(--accent);border-color:var(--ring)}
   details.fold[open] > summary::after{transform:rotate(180deg);color:var(--accent)}
   details.fold > .body{padding-top:8px}
-  /* Floating, draggable shape editor — opens above the canvas with a
-     glass panel matching the side asides. */
-  #shapeWindow{position:absolute;top:80px;left:340px;width:300px;
-    background:var(--panel);border:1px solid var(--line);border-radius:14px;
-    box-shadow:var(--shadow);backdrop-filter:blur(18px) saturate(140%);
-    -webkit-backdrop-filter:blur(18px) saturate(140%);z-index:20}
-  #shapeWindow .winHead{display:flex;align-items:center;justify-content:space-between;
-    padding:10px 14px;border-bottom:1px solid var(--line);
-    color:var(--muted);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
-    cursor:move;user-select:none}
-  #shapeWindow .winHead span{color:var(--accent)}
-  #shapeWindow .winClose{width:22px;height:22px;padding:0;margin:0;
-    background:transparent;border:1px solid transparent;border-radius:6px;
-    color:var(--muted);font-size:14px;line-height:1;cursor:pointer;
-    display:flex;align-items:center;justify-content:center}
-  #shapeWindow .winClose:hover{background:rgba(255,122,89,.12);border-color:var(--warn);color:var(--warn)}
-  #shapeWindow .winBody{padding:12px 14px}
 </style>
 </head>
 <body>
@@ -189,6 +172,44 @@
         <input id="fg" type="color" value="#e7e9ee">
       </div>
       <label class="chk" style="margin-top:8px"><input id="fill" type="checkbox" checked> fill cells</label>
+    </div>
+
+    <div class="section">
+      <h2>Shape</h2>
+      <!-- Every shape is a polygon preset that loads into the customPts
+           buffer; the editor below is always available for tweaks. -->
+      <div class="shape-grid" id="shapePresets">
+        <button data-p="square"      title="Square">▢</button>
+        <button data-p="circle"      title="Circle">○</button>
+        <button data-p="diamond"     title="Diamond">◇</button>
+        <button data-p="cross"       title="Cross / plus">✚</button>
+        <button data-p="dot"         title="Centered dot">•</button>
+        <button data-p="tri"         title="Triangle">▲</button>
+        <button data-p="tri2"        title="Two triangles">▲▼</button>
+        <button data-p="bar"         title="Rectangular bar">▬</button>
+        <button data-p="hex"         title="Hexagon">⬣</button>
+        <button data-p="houndstooth" title="Houndstooth">▦</button>
+      </div>
+      <details class="fold" id="shapeEditFold">
+        <summary>Edit shape</summary>
+        <div class="body" id="customBox">
+          <div class="row" style="margin:0"><label>Angle</label>
+            <input id="customAngle" type="range" min="0" max="180" value="0" step="1">
+            <input class="v" id="customAngleV" type="number" min="0" max="180" step="1"></div>
+          <canvas id="shapeEd" width="240" height="240"
+            style="width:100%;aspect-ratio:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-top:6px;display:block;cursor:crosshair"></canvas>
+          <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.35">
+            Click to add a vertex · drag (Ctrl: snap) · dbl-click to remove · shift+click to start a new sub-shape · <b id="vCount" style="color:var(--text)">0</b> vertices
+          </div>
+          <label class="chk" style="margin-top:6px;display:flex;align-items:center;gap:6px">
+            <input id="liveCorner" type="checkbox"> Live corners (per-vertex roundness)
+          </label>
+          <div class="seg two">
+            <button id="shapeClear" class="danger">Clear</button>
+            <button id="shapeClose">Toggle closed</button>
+          </div>
+        </div>
+      </details>
     </div>
 
     <div class="section">
@@ -221,25 +242,6 @@
       <div class="row"><label>Stroke</label>
         <input id="stroke" type="range" min="0" max="6" value="0" step="0.1">
         <input class="v" id="strokeV" type="number" min="0" max="6" step="0.1"></div>
-    </div>
-
-    <div class="section">
-      <h2>Shape</h2>
-      <!-- Every shape is a polygon preset that loads into the customPts
-           buffer; the editor lives in a floating window opened below. -->
-      <div class="shape-grid" id="shapePresets">
-        <button data-p="square"      title="Square">▢</button>
-        <button data-p="circle"      title="Circle">○</button>
-        <button data-p="diamond"     title="Diamond">◇</button>
-        <button data-p="cross"       title="Cross / plus">✚</button>
-        <button data-p="dot"         title="Centered dot">•</button>
-        <button data-p="tri"         title="Triangle">▲</button>
-        <button data-p="tri2"        title="Two triangles">▲▼</button>
-        <button data-p="bar"         title="Rectangular bar">▬</button>
-        <button data-p="hex"         title="Hexagon">⬣</button>
-        <button data-p="houndstooth" title="Houndstooth">▦</button>
-      </div>
-      <button id="openShapeEditor" style="margin-top:8px">⌧ Open shape editor</button>
     </div>
 
     <div class="section">
@@ -401,32 +403,6 @@
       </div>
     </div>
   </aside>
-
-  <!-- Floating, draggable shape editor window. Hidden until the user opens
-       it from the Shape section. Drag by the title bar to reposition. -->
-  <div id="shapeWindow" style="display:none">
-    <div class="winHead" id="shapeWinHead">
-      <span>Shape editor</span>
-      <button id="closeShapeEditor" class="winClose" title="Close">×</button>
-    </div>
-    <div class="winBody" id="customBox">
-      <div class="row" style="margin:0"><label>Angle</label>
-        <input id="customAngle" type="range" min="0" max="180" value="0" step="1">
-        <input class="v" id="customAngleV" type="number" min="0" max="180" step="1"></div>
-      <canvas id="shapeEd" width="240" height="240"
-        style="width:100%;aspect-ratio:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-top:6px;display:block;cursor:crosshair"></canvas>
-      <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.35">
-        Click to add a vertex · drag (Ctrl: snap) · dbl-click to remove · shift+click to start a new sub-shape · <b id="vCount" style="color:var(--text)">0</b> vertices
-      </div>
-      <label class="chk" style="margin-top:6px;display:flex;align-items:center;gap:6px">
-        <input id="liveCorner" type="checkbox"> Live corners (per-vertex roundness)
-      </label>
-      <div class="seg two">
-        <button id="shapeClear" class="danger">Clear</button>
-        <button id="shapeClose">Toggle closed</button>
-      </div>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -2066,35 +2042,6 @@ $('shapeClear').addEventListener('click', ()=>{
 $('shapeClose').addEventListener('click', ()=>{
   S.customClosed = !S.customClosed; drawEditor(); draw();
 });
-
-// Floating shape-editor window — open/close + drag-to-move by the title bar.
-$('openShapeEditor').addEventListener('click', () => {
-  $('shapeWindow').style.display = 'block';
-  drawEditor();
-});
-$('closeShapeEditor').addEventListener('click', () => {
-  $('shapeWindow').style.display = 'none';
-});
-(function makeShapeWindowDraggable(){
-  const win = $('shapeWindow');
-  const head = $('shapeWinHead');
-  let dragging = false, ox = 0, oy = 0;
-  head.addEventListener('mousedown', e => {
-    if(e.target.closest('.winClose')) return;
-    dragging = true;
-    const r = win.getBoundingClientRect();
-    ox = e.clientX - r.left;
-    oy = e.clientY - r.top;
-    e.preventDefault();
-  });
-  addEventListener('mousemove', e => {
-    if(!dragging) return;
-    win.style.left = (e.clientX - ox) + 'px';
-    win.style.top  = (e.clientY - oy) + 'px';
-    win.style.right = 'auto';
-  });
-  addEventListener('mouseup', () => { dragging = false; });
-})();
 function syncRadialBoxVisibility(){
   $('radialBox').style.display = (S.tileType === 'radial') ? '' : 'none';
 }
