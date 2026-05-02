@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5.18 — pixel pattern designer</title>
+<title>pixpat v1.5.19 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#08090c; --panel:rgba(20,22,28,.72); --panel2:#1c1f25; --line:rgba(255,255,255,.08);
@@ -163,10 +163,10 @@
     transition:background .12s ease, border-color .12s ease, color .12s ease}
   .fileBtn:hover{background:rgba(255,255,255,.07);border-color:var(--line-strong);color:var(--accent)}
   /* Centered modal — same glass-card aesthetic as the side panels. */
-  #modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+  #modal,.modal-host{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
     background:rgba(0,0,0,.45);backdrop-filter:blur(4px);
     -webkit-backdrop-filter:blur(4px);z-index:100}
-  #modal.on{display:flex}
+  #modal.on,.modal-host.on{display:flex}
   .modal-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
     box-shadow:var(--shadow);backdrop-filter:blur(18px) saturate(140%);
     -webkit-backdrop-filter:blur(18px) saturate(140%);
@@ -178,6 +178,16 @@
   .modal-actions button{margin:0;width:96px;padding:7px 0}
   .modal-actions button.primary{border-color:var(--accent);color:var(--accent);
     background:linear-gradient(180deg,rgba(124,242,193,.14),rgba(124,242,193,.06))}
+  /* Snip-tool overlay (rendered above panels and canvas). */
+  #snipLayer{position:fixed;inset:0;cursor:crosshair;z-index:200;
+    background:rgba(0,0,0,.55);user-select:none}
+  #snipHint{position:absolute;top:20px;left:50%;transform:translateX(-50%);
+    color:var(--text);background:var(--panel);padding:8px 14px;border-radius:10px;
+    border:1px solid var(--ring);box-shadow:var(--shadow);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    font-size:11px;letter-spacing:.06em;pointer-events:none}
+  #snipRect{position:absolute;display:none;border:1.5px solid var(--accent);
+    background:rgba(124,242,193,.08);box-shadow:0 0 0 9999px rgba(0,0,0,.55)}
 </style>
 </head>
 <body>
@@ -440,6 +450,29 @@
         <button id="modalOk" class="primary">OK</button>
       </div>
     </div>
+  </div>
+
+  <!-- Export-region picker. Three modes: whole canvas, attractors only, or
+       a user-defined snip rectangle. Format (PNG/SVG) is set before opening. -->
+  <div id="exportModal" class="modal-host">
+    <div class="modal-card" style="width:300px">
+      <h3 id="exportTitle">Export</h3>
+      <p>Choose what to export</p>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button id="expWhole">Whole canvas</button>
+        <button id="expAttr">Attractors only</button>
+        <button id="expSnip">Snip area…</button>
+      </div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button id="expCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Snip overlay — drag to define the export rectangle. Esc to cancel. -->
+  <div id="snipLayer" style="display:none">
+    <div id="snipHint">Drag to select export area · Esc to cancel</div>
+    <div id="snipRect"></div>
   </div>
 </div>
 
@@ -3501,28 +3534,186 @@ function renderPNG(scale){
     draw();                          // restore the on-screen render
   }
 }
-$('png').addEventListener('click', () => {
-  const scale = parseInt($('pngScale').value, 10) || 1;
+// Render a specific WORLD-space rectangle into a PNG data-url. The rectangle
+// is translated into the canvas viewport by re-pointing pan/zoom/w/h at the
+// region, drawing once into an offscreen canvas, then restoring everything.
+function renderPNGRegion(region, scale){
+  scale = scale || 1;
+  const baseZoom = S.zoom;
+  const pxW = Math.max(1, Math.round(region.w * baseZoom));
+  const pxH = Math.max(1, Math.round(region.h * baseZoom));
+  const off = document.createElement('canvas');
+  off.width  = pxW * scale;
+  off.height = pxH * scale;
+  const offCtx = off.getContext('2d');
+  const o = { ctx, dpr:S.dpr, panX:S.panX, panY:S.panY, zoom:S.zoom,
+              w:S.w, h:S.h, hide:S.hideAttractors, imgVis:S.image.visible };
+  ctx = offCtx;
+  S.dpr = scale;
+  S.zoom = baseZoom;
+  S.panX = -region.x * baseZoom;
+  S.panY = -region.y * baseZoom;
+  S.w = pxW; S.h = pxH;
+  S.hideAttractors = true; S.image.visible = false;
+  try {
+    draw();
+    return off.toDataURL('image/png');
+  } finally {
+    ctx = o.ctx;
+    S.dpr = o.dpr; S.panX = o.panX; S.panY = o.panY; S.zoom = o.zoom;
+    S.w = o.w; S.h = o.h;
+    S.hideAttractors = o.hide; S.image.visible = o.imgVis;
+    draw();
+  }
+}
+function renderSVGRegion(region){
+  const baseZoom = S.zoom;
+  const pxW = Math.max(1, Math.round(region.w * baseZoom));
+  const pxH = Math.max(1, Math.round(region.h * baseZoom));
+  const o = { panX:S.panX, panY:S.panY, w:S.w, h:S.h };
+  S.panX = -region.x * baseZoom;
+  S.panY = -region.y * baseZoom;
+  S.w = pxW; S.h = pxH;
+  try {
+    const parts = [];
+    parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${pxW}" height="${pxH}" viewBox="0 0 ${pxW} ${pxH}">`);
+    parts.push(`<rect width="100%" height="100%" fill="${S.bg}"/>`);
+    renderSVGGrid(parts);
+    parts.push('</svg>');
+    return parts.join('');
+  } finally {
+    S.panX = o.panX; S.panY = o.panY; S.w = o.w; S.h = o.h;
+  }
+}
+// Bounding rectangle (world coords) of all unmuted attractors, padded by
+// each one's falloff Radius so the field gradient isn't clipped at the edge.
+function computeAttractorBounds(){
+  if(!S.attractors.length) return null;
+  let x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity, any=false;
+  for(const a of S.attractors){
+    if(a.muted) continue;
+    let bb = attractorBBox(a);
+    if(!bb){
+      if(a.type === 'point'){
+        bb = { x0:a.x-a.r, y0:a.y-a.r, x1:a.x+a.r, y1:a.y+a.r };
+      } else if(a.type === 'gradient'){
+        const minx = Math.min(a.a[0], a.b[0]) - a.r;
+        const maxx = Math.max(a.a[0], a.b[0]) + a.r;
+        const miny = Math.min(a.a[1], a.b[1]) - a.r;
+        const maxy = Math.max(a.a[1], a.b[1]) + a.r;
+        bb = { x0:minx, y0:miny, x1:maxx, y1:maxy };
+      } else continue;
+    } else {
+      bb = { x0:bb.x0-a.r, y0:bb.y0-a.r, x1:bb.x1+a.r, y1:bb.y1+a.r };
+    }
+    if(bb.x0 < x0) x0 = bb.x0;
+    if(bb.y0 < y0) y0 = bb.y0;
+    if(bb.x1 > x1) x1 = bb.x1;
+    if(bb.y1 > y1) y1 = bb.y1;
+    any = true;
+  }
+  return any ? { x:x0, y:y0, w:x1-x0, h:y1-y0 } : null;
+}
+// Snip overlay: drag to define a screen rectangle, returns world region or null.
+function startSnipTool(){
+  return new Promise(resolve => {
+    const layer = $('snipLayer'), rect = $('snipRect');
+    layer.style.display = 'block';
+    rect.style.display  = 'none';
+    let dragging = false, sx = 0, sy = 0;
+    const cleanup = () => {
+      layer.style.display = 'none';
+      layer.removeEventListener('mousedown', onDown);
+      layer.removeEventListener('mousemove', onMove);
+      layer.removeEventListener('mouseup',   onUp);
+      removeEventListener('keydown', onKey);
+    };
+    const onKey = ev => { if(ev.key === 'Escape'){ cleanup(); resolve(null); } };
+    const onDown = ev => {
+      dragging = true; sx = ev.clientX; sy = ev.clientY;
+      rect.style.left = sx + 'px'; rect.style.top = sy + 'px';
+      rect.style.width = '0px';   rect.style.height = '0px';
+      rect.style.display = 'block';
+    };
+    const onMove = ev => {
+      if(!dragging) return;
+      const x = Math.min(sx, ev.clientX), y = Math.min(sy, ev.clientY);
+      rect.style.left = x + 'px'; rect.style.top = y + 'px';
+      rect.style.width  = Math.abs(ev.clientX - sx) + 'px';
+      rect.style.height = Math.abs(ev.clientY - sy) + 'px';
+    };
+    const onUp = ev => {
+      if(!dragging) return;
+      dragging = false;
+      const x = Math.min(sx, ev.clientX), y = Math.min(sy, ev.clientY);
+      const w = Math.abs(ev.clientX - sx), h = Math.abs(ev.clientY - sy);
+      cleanup();
+      if(w < 8 || h < 8){ resolve(null); return; }
+      const r = cnv.getBoundingClientRect();
+      const [wx0, wy0] = screenToWorld(x - r.left,         y - r.top);
+      const [wx1, wy1] = screenToWorld(x - r.left + w,     y - r.top + h);
+      resolve({ x:wx0, y:wy0, w:wx1-wx0, h:wy1-wy0 });
+    };
+    layer.addEventListener('mousedown', onDown);
+    layer.addEventListener('mousemove', onMove);
+    layer.addEventListener('mouseup',   onUp);
+    addEventListener('keydown', onKey);
+  });
+}
+// Export pipeline: PNG / SVG buttons open the region picker, picker calls
+// the matching writer with a region (or null = whole canvas).
+function downloadPNG(region, scale, tag){
   const link = document.createElement('a');
-  const tag = scale === 1 ? '' : `_${scale}x`;
-  link.download = `pixpat_${S.shape}${tag}_${Date.now()}.png`;
-  link.href = renderPNG(scale);
+  const sx = scale === 1 ? '' : `_${scale}x`;
+  link.download = `pixpat_${S.shape}${sx}_${tag}_${Date.now()}.png`;
+  link.href = region ? renderPNGRegion(region, scale) : renderPNG(scale);
   link.click();
-});
-
-
-$('svg').addEventListener('click', () => {
-  const parts = [];
-  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${S.w}" height="${S.h}" viewBox="0 0 ${S.w} ${S.h}">`);
-  parts.push(`<rect width="100%" height="100%" fill="${S.bg}"/>`);
-  renderSVGGrid(parts);
-  parts.push('</svg>');
-  const blob = new Blob(parts, {type:'image/svg+xml'});
+}
+function downloadSVG(region, tag){
+  const svg = region ? renderSVGRegion(region) :
+    (() => {
+      const parts = [];
+      parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${S.w}" height="${S.h}" viewBox="0 0 ${S.w} ${S.h}">`);
+      parts.push(`<rect width="100%" height="100%" fill="${S.bg}"/>`);
+      renderSVGGrid(parts);
+      parts.push('</svg>');
+      return parts.join('');
+    })();
+  const blob = new Blob([svg], {type:'image/svg+xml'});
   const link = document.createElement('a');
-  link.download = `pixpat_${S.shape}_${Date.now()}.svg`;
+  link.download = `pixpat_${S.shape}_${tag}_${Date.now()}.svg`;
   link.href = URL.createObjectURL(blob);
   link.click();
-});
+}
+let pendingExportFormat = 'png';
+function openExportPicker(format){
+  pendingExportFormat = format;
+  $('exportTitle').textContent = 'Export ' + format.toUpperCase();
+  $('exportModal').classList.add('on');
+}
+async function runExport(mode){
+  $('exportModal').classList.remove('on');
+  let region = null;
+  if(mode === 'attr'){
+    region = computeAttractorBounds();
+    if(!region){ alert('No attractors to export.'); return; }
+  } else if(mode === 'snip'){
+    region = await startSnipTool();
+    if(!region) return;
+  }
+  if(pendingExportFormat === 'png'){
+    const scale = parseInt($('pngScale').value, 10) || 1;
+    downloadPNG(region, scale, mode);
+  } else {
+    downloadSVG(region, mode);
+  }
+}
+$('png').addEventListener('click', () => openExportPicker('png'));
+$('svg').addEventListener('click', () => openExportPicker('svg'));
+$('expWhole').addEventListener('click', () => runExport('whole'));
+$('expAttr').addEventListener('click',  () => runExport('attr'));
+$('expSnip').addEventListener('click',  () => runExport('snip'));
+$('expCancel').addEventListener('click', () => $('exportModal').classList.remove('on'));
 
 function renderSVGGrid(out){
   const s = S.size;
