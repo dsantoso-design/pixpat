@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5.7 — pixel pattern designer</title>
+<title>pixpat v1.5.8 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#0d0e10; --panel:#16181c; --panel2:#1c1f25; --line:#2a2e36;
@@ -193,6 +193,7 @@
         <option value="regular" selected>Regular grid</option>
         <option value="brick-row">Brick by row</option>
         <option value="brick-col">Brick by column</option>
+        <option value="radial">Radial (concentric rings)</option>
       </select>
       <details class="fold">
         <summary>Cell offsets</summary>
@@ -812,51 +813,68 @@ function cellShape(ctx, cx, cy, s, rot, corner, shape){
   ctx.restore();
 }
 
+// Render one cell at world (cx, cy). Shared by both the orthogonal grid and
+// the radial layout below.
+function renderGridCell(cx, cy, baseCorner, sp, s){
+  const f = fields(cx, cy);
+  const scale = clamp(1 + f.scale, 0, 2);
+  let fillColor = S.fg;
+  if(f.hole < -0.02) return;
+  if(f.hole !== 0){
+    const t = clamp((f.hole+1)/2, 0, 1);
+    fillColor = mixHex(fillColor, S.bg, 1 - t);
+  }
+  let sz = s * Math.max(0.02, scale) * sp;
+  if(f.halftone > 0)      sz = lerp(sz, s * scale,  f.halftone);
+  else if(f.halftone < 0) sz = lerp(sz, 0,         -f.halftone);
+  if(sz <= 0.5) return;
+  ctx.fillStyle = fillColor;
+  ctx.strokeStyle = fillColor;
+  cellShape(ctx, cx+f.px, cy+f.py, sz, 0, baseCorner*sz, S.shape);
+}
+
 function drawGrid(){
   const s = S.size;            // world px per cell
   const vb = viewBounds();
-  const i0 = Math.floor(vb.x0/s)-1, i1 = Math.ceil(vb.x1/s)+1;
-  const j0 = Math.floor(vb.y0/s)-1, j1 = Math.ceil(vb.y1/s)+1;
   const sp = S.scale;
   const baseCorner = (S.corner/100); // 0..0.5 of half
 
+  // Radial: concentric rings of cells around world (0,0). Each ring's count
+  // scales with its circumference, and a golden-ratio angular offset per ring
+  // gives every ring a unique starting point — produces the phyllotactic /
+  // sunburst arrangement seen on the Nest device.
+  if(S.tileType === 'radial'){
+    const golden = Math.PI * (3 - Math.sqrt(5));   // ≈ 137.5° in radians
+    const maxR = Math.max(
+      Math.hypot(vb.x0, vb.y0), Math.hypot(vb.x1, vb.y0),
+      Math.hypot(vb.x0, vb.y1), Math.hypot(vb.x1, vb.y1)
+    ) + s;
+    renderGridCell(0, 0, baseCorner, sp, s);       // center seed
+    for(let ring=1; ring*s <= maxR; ring++){
+      const ringR = ring*s;
+      const count = Math.max(6, Math.round((TAU*ringR)/s));
+      const startA = ring * golden;
+      for(let k=0; k<count; k++){
+        const a = startA + (k/count) * TAU;
+        const cx = Math.cos(a) * ringR;
+        const cy = Math.sin(a) * ringR;
+        if(cx < vb.x0-s || cx > vb.x1+s || cy < vb.y0-s || cy > vb.y1+s) continue;
+        renderGridCell(cx, cy, baseCorner, sp, s);
+      }
+    }
+    return;
+  }
+
+  const i0 = Math.floor(vb.x0/s)-1, i1 = Math.ceil(vb.x1/s)+1;
+  const j0 = Math.floor(vb.y0/s)-1, j1 = Math.ceil(vb.y1/s)+1;
   for(let j=j0;j<j1;j++){
     for(let i=i0;i<i1;i++){
       let cx = i*s + s/2, cy = j*s + s/2;
       if(S.tileType==='brick-row' && (j&1)) cx += s/2;
       if(S.tileType==='brick-col' && (i&1)) cy += s/2;
-      // Independent staggers: every other row shifts horizontally / every
-      // other column shifts vertically by these fractions of a cell (-1..1).
-      // Stack on top of the brick presets when both are active.
       if(S.tileOffsetX && (j&1)) cx += S.tileOffsetX * s;
       if(S.tileOffsetY && (i&1)) cy += S.tileOffsetY * s;
-
-      const rng = mulberry32(((i*374761393)^(j*668265263)) >>> 0);
-      const f = fields(cx,cy);
-
-      const scale  = clamp(1 + f.scale, 0, 2);
-      const corner = baseCorner;
-      let fillColor = S.fg;
-      let hide = false;
-      if(f.hole < -0.02) hide = true;
-      else if(f.hole !== 0){
-        const t = clamp((f.hole+1)/2, 0, 1);
-        fillColor = mixHex(fillColor, S.bg, 1 - t);
-      }
-
-      if(hide) continue;
-      let sz = s * Math.max(0.02, scale) * sp;
-      // Halftone mode: cells grow toward filling the grid slot (sz → s)
-      // as f.halftone → 1, with a hard cap at s — neighbours touch but
-      // never overlap. Negative values fade toward 0 instead.
-      if(f.halftone > 0)      sz = lerp(sz, s * scale, f.halftone);
-      else if(f.halftone < 0) sz = lerp(sz, 0,         -f.halftone);
-      if(sz <= 0.5) continue;
-      const cornerPx = corner * sz;
-
-      ctx.fillStyle = fillColor;
-      ctx.strokeStyle = fillColor;
-      cellShape(ctx, cx+f.px, cy+f.py, sz, 0, cornerPx, S.shape);
+      renderGridCell(cx, cy, baseCorner, sp, s);
     }
   }
 }
@@ -2442,7 +2460,8 @@ cnv.addEventListener('mousedown', e => {
             pushHistory();
             drag = {
               i: S.selected, vertex: 'scale',
-              pivot: corners[(c+2)%4],
+              pivotCorner: corners[(c+2)%4],
+              pivotCenter: [(bb.x0+bb.x1)/2, (bb.y0+bb.y1)/2],
               start: [wx, wy],
               startSnap: JSON.parse(JSON.stringify({...selA, _flat:undefined})),
               uniform: e.shiftKey,
@@ -2624,7 +2643,10 @@ addEventListener('mousemove', e => {
 
   // Free-transform scale drag
   if(drag.vertex === 'scale'){
-    const px = drag.pivot[0], py = drag.pivot[1];
+    // Hold Alt to scale around the bbox center (origin-locked); release to
+    // anchor at the opposite corner. Pivot can flip mid-drag.
+    const piv = e.altKey ? drag.pivotCenter : drag.pivotCorner;
+    const px = piv[0], py = piv[1];
     const sx = drag.start[0], sy = drag.start[1];
     let kx = (wx-px)/((sx-px) || 1e-9);
     let ky = (wy-py)/((sy-py) || 1e-9);
@@ -2904,71 +2926,82 @@ $('svg').addEventListener('click', () => {
 function renderSVGGrid(out){
   const s = S.size;
   const vb = viewBounds();
-  const i0 = Math.floor(vb.x0/s)-1, i1 = Math.ceil(vb.x1/s)+1;
-  const j0 = Math.floor(vb.y0/s)-1, j1 = Math.ceil(vb.y1/s)+1;
   const sp = S.scale;
   const baseCorner = S.corner/100;
-
   const toScreen = (x,y) => [x*S.zoom + S.panX, y*S.zoom + S.panY];
   const strokeAttr = S.stroke>0 ? ` stroke-width="${S.stroke}"` : '';
 
+  const emit = (cx, cy) => {
+    const f = fields(cx, cy);
+    const scale = clamp(1 + f.scale, 0, 2);
+    let fillColor = S.fg;
+    if(f.hole < -0.02) return;
+    if(f.hole !== 0){
+      const t = clamp((f.hole+1)/2, 0, 1);
+      fillColor = mixHex(fillColor, S.bg, 1 - t);
+    }
+    let sz = s*Math.max(0.02, scale)*sp;
+    if(f.halftone > 0)      sz = lerp(sz, s * scale,  f.halftone);
+    else if(f.halftone < 0) sz = lerp(sz, 0,         -f.halftone);
+    if(sz <= 0.5) return;
+    const [Sx, Sy] = toScreen(cx+f.px, cy+f.py);
+    const SS = sz * S.zoom;
+    const half = SS/2;
+    const fillA = S.fill ? fillColor : 'none';
+    const strokeA = S.stroke>0 ? ` stroke="${fillColor}"` : '';
+    const t = `transform="translate(${Sx.toFixed(2)},${Sy.toFixed(2)})"`;
+    const pts = S.customPts;
+    if(!pts || pts.length<2) return;
+    const subs = splitNullSubpaths(pts);
+    const cr = clamp(baseCorner*SS, 0, half);
+    const hasAnyVertexR = S.liveCorner && pts.some(p => p && p.length === 3 && p[2] > 0);
+    let d = '';
+    for(const sub of subs){
+      if(sub.length < 2) continue;
+      if((cr <= 0.5 && !hasAnyVertexR) || sub.length < 3 || !S.customClosed){
+        for(let k=0;k<sub.length;k++){
+          const cmd = k===0 ? 'M' : 'L';
+          d += cmd + (sub[k][0]*SS).toFixed(2) + ' ' + (sub[k][1]*SS).toFixed(2) + ' ';
+        }
+        if(S.customClosed) d += 'Z ';
+      } else {
+        d += roundedSubpathSVG(sub, SS, cr) + ' ';
+      }
+    }
+    if(d) out.push(`<path ${t} d="${d.trim()}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
+  };
+
+  if(S.tileType === 'radial'){
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    const maxR = Math.max(
+      Math.hypot(vb.x0, vb.y0), Math.hypot(vb.x1, vb.y0),
+      Math.hypot(vb.x0, vb.y1), Math.hypot(vb.x1, vb.y1)
+    ) + s;
+    emit(0, 0);
+    for(let ring=1; ring*s <= maxR; ring++){
+      const ringR = ring*s;
+      const count = Math.max(6, Math.round((TAU*ringR)/s));
+      const startA = ring * golden;
+      for(let k=0; k<count; k++){
+        const a = startA + (k/count) * TAU;
+        const cx = Math.cos(a) * ringR, cy = Math.sin(a) * ringR;
+        if(cx < vb.x0-s || cx > vb.x1+s || cy < vb.y0-s || cy > vb.y1+s) continue;
+        emit(cx, cy);
+      }
+    }
+    return;
+  }
+
+  const i0 = Math.floor(vb.x0/s)-1, i1 = Math.ceil(vb.x1/s)+1;
+  const j0 = Math.floor(vb.y0/s)-1, j1 = Math.ceil(vb.y1/s)+1;
   for(let j=j0;j<j1;j++){
     for(let i=i0;i<i1;i++){
       let cx = i*s + s/2, cy = j*s + s/2;
       if(S.tileType==='brick-row' && (j&1)) cx += s/2;
       if(S.tileType==='brick-col' && (i&1)) cy += s/2;
-      // Independent staggers: every other row shifts horizontally / every
-      // other column shifts vertically by these fractions of a cell (-1..1).
-      // Stack on top of the brick presets when both are active.
       if(S.tileOffsetX && (j&1)) cx += S.tileOffsetX * s;
       if(S.tileOffsetY && (i&1)) cy += S.tileOffsetY * s;
-
-      const rng = mulberry32(((i*374761393)^(j*668265263)) >>> 0);
-      const f = fields(cx,cy);
-
-      const scale  = clamp(1 + f.scale, 0, 2);
-      const corner = baseCorner;
-      let fillColor = S.fg;
-      let hide = false;
-      if(f.hole < -0.02) hide = true;
-      else if(f.hole !== 0){
-        const t = clamp((f.hole+1)/2, 0, 1);
-        fillColor = mixHex(fillColor, S.bg, 1 - t);
-      }
-      if(hide) continue;
-      let sz = s*Math.max(0.02,scale)*sp;
-      if(f.halftone > 0)      sz = lerp(sz, s * scale, f.halftone);
-      else if(f.halftone < 0) sz = lerp(sz, 0,         -f.halftone);
-      if(sz<=0.5) continue;
-
-      const [Sx,Sy] = toScreen(cx+f.px, cy+f.py);
-      const SS = sz * S.zoom;
-      const half = SS/2;
-      const fillA = S.fill ? fillColor : 'none';
-      const strokeA = S.stroke>0 ? ` stroke="${fillColor}"` : '';
-      const t = `transform="translate(${Sx.toFixed(2)},${Sy.toFixed(2)})"`;
-
-      // Every shape exports through the shared customPts polygon path so
-      // SVG output mirrors what cellShape draws on the canvas.
-      const pts = S.customPts;
-      if(!pts || pts.length<2) continue;
-      const subs = splitNullSubpaths(pts);
-      const cr = clamp(corner*SS, 0, half);
-      const hasAnyVertexR = S.liveCorner && pts.some(p => p && p.length === 3 && p[2] > 0);
-      let d = '';
-      for(const sub of subs){
-        if(sub.length < 2) continue;
-        if((cr <= 0.5 && !hasAnyVertexR) || sub.length < 3 || !S.customClosed){
-          for(let k=0;k<sub.length;k++){
-            const cmd = k===0 ? 'M' : 'L';
-            d += cmd + (sub[k][0]*SS).toFixed(2) + ' ' + (sub[k][1]*SS).toFixed(2) + ' ';
-          }
-          if(S.customClosed) d += 'Z ';
-        } else {
-          d += roundedSubpathSVG(sub, SS, cr) + ' ';
-        }
-      }
-      if(d) out.push(`<path ${t} d="${d.trim()}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
+      emit(cx, cy);
     }
   }
 }
