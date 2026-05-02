@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5.9 — pixel pattern designer</title>
+<title>pixpat v1.5.10 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#08090c; --panel:rgba(20,22,28,.72); --panel2:#1c1f25; --line:rgba(255,255,255,.08);
@@ -82,6 +82,9 @@
     border:1px solid var(--line);border-radius:8px;padding:7px 10px;
     font:inherit;cursor:pointer;transition:background .12s ease, border-color .12s ease, color .12s ease}
   select{width:100%}
+  /* Native dropdown popup uses OS theme by default — force the dark palette
+     so options stay legible when the menu opens over the floating panel. */
+  select option{background:#16181c;color:var(--text)}
   button{width:100%;margin-top:6px}
   button:hover{background:rgba(255,255,255,.07);border-color:var(--line-strong);color:var(--accent)}
   button.danger:hover{border-color:var(--warn);color:var(--warn)}
@@ -234,6 +237,21 @@
             <input class="v" id="tileOffsetYV" type="number" min="-1" max="1" step="0.01"></div>
         </div>
       </details>
+      <!-- Radial-tile controls — visible only when tileType === 'radial'. -->
+      <div id="radialBox" style="display:none;margin-top:6px">
+        <div class="row" style="margin-top:0"><label>Spacing</label>
+          <input id="radialSpacing" type="range" min="0.3" max="3" value="1" step="0.01">
+          <input class="v" id="radialSpacingV" type="number" min="0.3" max="3" step="0.01"></div>
+        <div class="row"><label>Density</label>
+          <input id="radialDensity" type="range" min="0.3" max="3" value="1" step="0.01">
+          <input class="v" id="radialDensityV" type="number" min="0.3" max="3" step="0.01"></div>
+        <div class="row"><label>Twist</label>
+          <input id="radialTwist" type="range" min="0" max="2" value="1" step="0.01">
+          <input class="v" id="radialTwistV" type="number" min="0" max="2" step="0.01"></div>
+        <div class="row"><label>Orient</label>
+          <input id="radialOrient" type="range" min="0" max="360" value="0" step="1">
+          <input class="v" id="radialOrientV" type="number" min="0" max="360" step="1"></div>
+      </div>
     </div>
 
     <div class="section">
@@ -406,6 +424,7 @@ function mixHex(a,b,t){
 
 const S = {
   shape:'dot', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
+  radialSpacing:1, radialDensity:1, radialTwist:1, radialOrient:0,
   customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
   size:42, scale:0.23, corner:0, stroke:0,
   attractors:[], selected:-1,
@@ -424,11 +443,15 @@ const S = {
   lockAdd:false,
 };
 
-const SNAP_KEYS = ['shape','tileType','tileOffsetX','tileOffsetY','customPts','customClosed','customAngle',
+const SNAP_KEYS = ['shape','tileType','tileOffsetX','tileOffsetY',
+  'radialSpacing','radialDensity','radialTwist','radialOrient',
+  'customPts','customClosed','customAngle',
   'size','scale','corner','stroke',
   'bg','fg','fill','attractors','selected'];
 const UI_CONTROLS = {
   shape:'shape', tileType:'tileType', tileOffsetX:'tileOffsetX', tileOffsetY:'tileOffsetY',
+  radialSpacing:'radialSpacing', radialDensity:'radialDensity',
+  radialTwist:'radialTwist', radialOrient:'radialOrient',
   customAngle:'customAngle',
   size:'size', scale:'scale', corner:'corner', stroke:'stroke',
   bg:'bg', fg:'fg', fill:'fill',
@@ -873,15 +896,19 @@ function drawGrid(){
   // sunburst arrangement seen on the Nest device.
   if(S.tileType === 'radial'){
     const golden = Math.PI * (3 - Math.sqrt(5));   // ≈ 137.5° in radians
+    const step    = s * (S.radialSpacing || 1);
+    const density = S.radialDensity || 1;
+    const twist   = S.radialTwist == null ? 1 : S.radialTwist;
+    const orient  = (S.radialOrient || 0) * Math.PI / 180;
     const maxR = Math.max(
       Math.hypot(vb.x0, vb.y0), Math.hypot(vb.x1, vb.y0),
       Math.hypot(vb.x0, vb.y1), Math.hypot(vb.x1, vb.y1)
-    ) + s;
+    ) + step;
     renderGridCell(0, 0, baseCorner, sp, s);       // center seed
-    for(let ring=1; ring*s <= maxR; ring++){
-      const ringR = ring*s;
-      const count = Math.max(6, Math.round((TAU*ringR)/s));
-      const startA = ring * golden;
+    for(let ring=1; ring*step <= maxR; ring++){
+      const ringR = ring*step;
+      const count = Math.max(3, Math.round(((TAU*ringR)/s) * density));
+      const startA = orient + ring * golden * twist;
       for(let k=0; k<count; k++){
         const a = startA + (k/count) * TAU;
         const cx = Math.cos(a) * ringR;
@@ -1218,6 +1245,10 @@ bindRange('corner','corner', v=>v.toFixed(0));
 bindRange('stroke','stroke', v=>v.toFixed(1));
 bindRange('tileOffsetX','tileOffsetX', v=>v.toFixed(2));
 bindRange('tileOffsetY','tileOffsetY', v=>v.toFixed(2));
+bindRange('radialSpacing','radialSpacing', v=>v.toFixed(2));
+bindRange('radialDensity','radialDensity', v=>v.toFixed(2));
+bindRange('radialTwist','radialTwist',     v=>v.toFixed(2));
+bindRange('radialOrient','radialOrient',   v=>v.toFixed(0));
 bindRange('aStrength','aStrength', v=>v.toFixed(2), v=>{
   if(S.selected>=0 && S.attractors[S.selected]){
     S.attractors[S.selected].strength = v;
@@ -1255,6 +1286,7 @@ function syncShapeUI(){
   // only safe to call AFTER the custom-shape-editor section has executed.
   if(typeof syncShapeIcon === 'function') syncShapeIcon();
   if(typeof drawEditor === 'function') drawEditor();
+  if(typeof syncRadialBoxVisibility === 'function') syncRadialBoxVisibility();
 }
 // (No early call here — the editor's sEd const isn't initialized yet.)
 
@@ -1262,6 +1294,7 @@ function syncShapeUI(){
 // What gets captured in a preset: everything the user chose visually except
 // view (zoom/pan), reference image, transient UI flags, and history.
 const PRESET_KEYS = ['shape','tileType','tileOffsetX','tileOffsetY',
+  'radialSpacing','radialDensity','radialTwist','radialOrient',
   'customPts','customClosed','customAngle',
   'size','scale','corner','stroke',
   'bg','fg','fill','attractors'];
@@ -1901,7 +1934,15 @@ $('shapeClear').addEventListener('click', ()=>{
 $('shapeClose').addEventListener('click', ()=>{
   S.customClosed = !S.customClosed; drawEditor(); draw();
 });
-$('tileType').addEventListener('change', e => { S.tileType = e.target.value; draw(); });
+function syncRadialBoxVisibility(){
+  $('radialBox').style.display = (S.tileType === 'radial') ? '' : 'none';
+}
+$('tileType').addEventListener('change', e => {
+  S.tileType = e.target.value;
+  syncRadialBoxVisibility();
+  draw();
+});
+syncRadialBoxVisibility();
 
 // ---------- reference image ----------
 $('imgFile').addEventListener('change', e => {
@@ -3001,15 +3042,19 @@ function renderSVGGrid(out){
 
   if(S.tileType === 'radial'){
     const golden = Math.PI * (3 - Math.sqrt(5));
+    const step    = s * (S.radialSpacing || 1);
+    const density = S.radialDensity || 1;
+    const twist   = S.radialTwist == null ? 1 : S.radialTwist;
+    const orient  = (S.radialOrient || 0) * Math.PI / 180;
     const maxR = Math.max(
       Math.hypot(vb.x0, vb.y0), Math.hypot(vb.x1, vb.y0),
       Math.hypot(vb.x0, vb.y1), Math.hypot(vb.x1, vb.y1)
-    ) + s;
+    ) + step;
     emit(0, 0);
-    for(let ring=1; ring*s <= maxR; ring++){
-      const ringR = ring*s;
-      const count = Math.max(6, Math.round((TAU*ringR)/s));
-      const startA = ring * golden;
+    for(let ring=1; ring*step <= maxR; ring++){
+      const ringR = ring*step;
+      const count = Math.max(3, Math.round(((TAU*ringR)/s) * density));
+      const startA = orient + ring * golden * twist;
       for(let k=0; k<count; k++){
         const a = startA + (k/count) * TAU;
         const cx = Math.cos(a) * ringR, cy = Math.sin(a) * ringR;
