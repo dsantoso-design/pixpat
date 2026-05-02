@@ -8,6 +8,7 @@ No build step. Open the `index.html` file in any modern browser.
 
 - **[v1/](v1/index.html)** — initial release. Per-attractor radius, curve, strength, mode (scale / hole).
 - **[v1.5/](v1.5/index.html)** — adds a per-attractor **Pull** control (magnetic displacement) plus a **draggable magnetic anchor** for each attractor: cells inside the attractor's radius get visually shifted toward (or away from) the anchor. The anchor defaults to the geometry centroid (point itself for Point, center for Ellipse, midpoint for Gradient, average of nodes for Pen) and is movable independently. A reset button restores it to the centroid. Closer cells get pulled harder, producing a clustering / magnet effect. Also: hover cursor changes to a pointer over attractors, and Delete / Backspace removes the selected attractor.
+- **[v1.6/](v1.6/index.html)** — multi-select + **Align centers**, custom **pen-icon cursor**, and **25 % zoom-out cap**. Shift+click rows in the attractor list to add to a selection set; with two or more selected the **Align centers** button stacks all of their origins on the group centroid.
 
 ## Attractor controls (v1.5)
 

@@ -1,0 +1,3920 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pixpat v1.6 — pixel pattern designer</title>
+<style>
+  :root{
+    --bg:#08090c; --panel:rgba(20,22,28,.72); --panel2:#1c1f25; --line:rgba(255,255,255,.08);
+    --line-strong:rgba(255,255,255,.14);
+    --text:#e7e9ee; --muted:#8a909c; --accent:#7cf2c1; --warn:#ff7a59;
+    --ring:rgba(124,242,193,.18);
+    --shadow:0 18px 60px -10px rgba(0,0,0,.7), 0 4px 20px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;color:var(--text);
+    font:13px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:
+      radial-gradient(1200px 800px at 12% -10%, #131722 0%, transparent 60%),
+      radial-gradient(900px 700px at 100% 110%, #15201d 0%, transparent 55%),
+      #08090c;}
+  #app{position:relative;width:100vw;height:100vh;overflow:hidden}
+  /* The two side panels float above a full-bleed canvas so the design is the
+     full screen, not boxed inside a 3-column grid. */
+  aside{position:absolute;top:16px;bottom:16px;width:300px;padding:16px;
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    box-shadow:var(--shadow);backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    overflow-y:auto;overflow-x:hidden;z-index:10;
+    scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+  aside::-webkit-scrollbar{width:8px}
+  aside::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:8px}
+  aside::-webkit-scrollbar-track{background:transparent}
+  aside:not(.right){left:16px}
+  aside.right{right:16px}
+  .row > *{min-width:0}
+  .aList{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+  .aItem{display:flex;align-items:center;gap:6px;padding:6px 8px;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;
+    font-size:11px;cursor:pointer;transition:background .12s, border-color .12s}
+  .aItem:hover{border-color:var(--line-strong);background:rgba(255,255,255,.06)}
+  .aItem.on{border-color:var(--accent);color:var(--accent);
+    background:linear-gradient(180deg,rgba(124,242,193,.12),rgba(124,242,193,.04))}
+  /* Multi-selection (shift+click in the list) — softer accent so the primary
+     row still stands out via .on. Both classes can co-exist. */
+  .aItem.multi:not(.on){border-color:var(--accent);
+    background:rgba(124,242,193,.06);color:var(--text)}
+  .aItem .name{flex:1;min-width:0;background:transparent;border:1px solid transparent;
+    color:inherit;font:inherit;font-size:11px;padding:2px 4px;border-radius:3px;
+    overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  span.name{user-select:none}
+  input.name:focus{outline:none;background:var(--panel);border-color:var(--accent);color:var(--text)}
+  .aItem .mode{color:var(--muted);font-size:10px;flex:0 0 auto;white-space:nowrap}
+  .aItem.on .mode{color:var(--accent)}
+  .aItem .btn{width:18px;height:18px;display:flex;align-items:center;justify-content:center;
+    background:transparent;border:1px solid transparent;color:var(--muted);
+    border-radius:4px;padding:0;margin:0;line-height:1;font-size:12px;flex:0 0 auto}
+  .aItem .dup:hover{color:var(--accent);border-color:var(--accent)}
+  .aItem .x:hover{color:var(--warn);border-color:var(--warn)}
+  .aItem .mute{color:var(--accent)}
+  .aItem .mute.off{color:var(--muted)}
+  .aItem .mute:hover{border-color:var(--accent)}
+  .aItem.muted .name{color:var(--muted);text-decoration:line-through}
+  .empty{color:var(--muted);font-size:11px;padding:8px 0;font-style:italic}
+  aside h1{font-size:18px;letter-spacing:-.01em;text-transform:none;
+    color:var(--text);margin:0 0 2px;font-weight:600;display:flex;align-items:center;gap:6px}
+  aside h1 b{color:var(--accent);font-weight:600}
+  aside h1::before{content:'';width:6px;height:6px;border-radius:50%;
+    background:var(--accent);box-shadow:0 0 12px var(--accent)}
+  aside .tag{color:var(--muted);font-size:11px;margin:0 0 12px;letter-spacing:.02em}
+  aside h2{font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin:14px 0 8px;font-weight:600}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}
+  .row label{color:var(--muted);font-size:12px;flex:1}
+  .row .v{color:var(--text);font-variant-numeric:tabular-nums;
+    font-size:11px;min-width:44px;text-align:right}
+  .row input.v{width:52px;min-width:52px;flex:0 0 52px;
+    background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:6px;
+    padding:3px 6px;font:inherit;font-size:11px;color:var(--text);
+    font-variant-numeric:tabular-nums;text-align:right;
+    appearance:textfield;-moz-appearance:textfield;transition:border-color .12s}
+  .row input.v:focus{outline:none;border-color:var(--accent);background:rgba(0,0,0,.35)}
+  .row input.v::-webkit-outer-spin-button,
+  .row input.v::-webkit-inner-spin-button{-webkit-appearance:none;appearance:none;margin:0}
+  input[type=range]{flex:1.4;accent-color:var(--accent);background:transparent}
+  select,button{background:rgba(255,255,255,.04);color:var(--text);
+    border:1px solid var(--line);border-radius:8px;padding:7px 10px;
+    font:inherit;cursor:pointer;transition:background .12s ease, border-color .12s ease, color .12s ease}
+  select{width:100%}
+  /* Native dropdown popup uses OS theme by default — force the dark palette
+     so options stay legible when the menu opens over the floating panel. */
+  select option{background:#16181c;color:var(--text)}
+  button{width:100%;margin-top:6px}
+  button:hover{background:rgba(255,255,255,.07);border-color:var(--line-strong);color:var(--accent)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button:disabled:hover{background:rgba(255,255,255,.04);border-color:var(--line);color:var(--muted)}
+  button.danger:hover{border-color:var(--warn);color:var(--warn)}
+  .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:4px}
+  .seg.two{grid-template-columns:repeat(2,1fr)}
+  .seg.five{grid-template-columns:repeat(5,1fr)}
+  .seg button{margin:0;padding:6px 4px;font-size:11px;border-radius:7px}
+  .seg button.on{border-color:var(--accent);color:var(--accent);
+    background:linear-gradient(180deg,rgba(124,242,193,.14),rgba(124,242,193,.06));
+    box-shadow:inset 0 0 0 1px rgba(124,242,193,.15)}
+  main{position:absolute;inset:0;overflow:hidden;background:transparent}
+  canvas{display:block;width:100%;height:100%;cursor:default}
+  /* HUD chips float bottom-center so the floating panels don't crowd them.
+     Center the cluster between the two side panels. */
+  #hud{position:absolute;left:50%;transform:translateX(-50%);bottom:16px;color:var(--muted);
+    font-size:11px;pointer-events:none;letter-spacing:.04em;max-width:60vw;text-align:center;
+    background:var(--panel);padding:8px 14px;border-radius:10px;
+    border:1px solid var(--line);backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow);z-index:5}
+  #hud b{color:var(--text);font-weight:500}
+  #zoomTag{position:absolute;right:332px;bottom:16px;color:var(--muted);
+    font-size:11px;font-variant-numeric:tabular-nums;pointer-events:none;
+    background:var(--panel);padding:8px 12px;border-radius:10px;
+    border:1px solid var(--line);backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow);z-index:5}
+  #toolTag,#gradTag{position:absolute;left:332px;top:16px;color:var(--accent);
+    font-size:11px;letter-spacing:.08em;pointer-events:none;
+    background:var(--panel);padding:6px 12px;border-radius:10px;
+    border:1px solid var(--ring);backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow);display:none;z-index:5}
+  #toolTag.on,#gradTag.on{display:block}
+  .swatch{display:flex;gap:6px;margin-top:4px;align-items:stretch}
+  .swatch input[type=color]{flex:1;height:30px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:6px;padding:2px;cursor:pointer}
+  .swatch button.swap{flex:0 0 30px;width:30px;margin:0;padding:0;font-size:14px;
+    display:flex;align-items:center;justify-content:center}
+  .chk{display:flex;align-items:center;gap:6px;color:var(--muted)}
+  .chk input{accent-color:var(--accent)}
+  .pill{display:inline-block;padding:1px 6px;border:1px solid var(--line);
+    border-radius:10px;color:var(--muted);font-size:10px;margin-left:6px}
+  .pill.on{color:var(--accent);border-color:var(--accent)}
+  .row button.reset{width:20px;height:20px;flex:0 0 20px;margin:0;padding:0;
+    font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center;
+    background:transparent;border:1px solid transparent;color:var(--muted);
+    border-radius:4px;cursor:pointer}
+  .row button.reset:hover{border-color:var(--accent);color:var(--accent)}
+  /* Each functional group (Shape, Color, Tool, etc.) sits inside its own
+     low-opacity 'island' so the panels read as a stack of cards. */
+  .section{background:rgba(255,255,255,.025);
+    border:1px solid rgba(255,255,255,.05);border-radius:12px;
+    padding:8px 12px 12px;margin:10px 0;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+  .section > h2:first-child{margin-top:6px}
+  .section > h2{margin-top:8px}
+  .shape-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:4px}
+  .shape-grid button{margin:0;padding:7px 0;font-size:14px;line-height:1;border-radius:7px}
+  .shape-grid button.on{border-color:var(--accent);color:var(--accent);
+    background:linear-gradient(180deg,rgba(124,242,193,.14),rgba(124,242,193,.06));
+    box-shadow:inset 0 0 0 1px rgba(124,242,193,.15)}
+  details.fold{margin-top:6px}
+  details.fold > summary{cursor:pointer;list-style:none;
+    background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:8px;
+    padding:6px 10px;color:var(--muted);font-size:10px;letter-spacing:.12em;
+    text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;
+    user-select:none;transition:border-color .12s ease,color .12s ease}
+  details.fold > summary::-webkit-details-marker{display:none}
+  details.fold > summary::after{content:'▾';color:var(--muted);transition:transform .15s}
+  details.fold > summary:hover{color:var(--text);border-color:var(--line-strong)}
+  details.fold[open] > summary{color:var(--accent);border-color:var(--ring)}
+  details.fold[open] > summary::after{transform:rotate(180deg);color:var(--accent)}
+  details.fold > .body{padding-top:8px}
+  /* Styled label that opens a hidden <input type="file">. */
+  .fileBtn{display:block;width:100%;background:rgba(255,255,255,.04);
+    color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:7px 10px;font:inherit;cursor:pointer;text-align:center;
+    transition:background .12s ease, border-color .12s ease, color .12s ease}
+  .fileBtn:hover{background:rgba(255,255,255,.07);border-color:var(--line-strong);color:var(--accent)}
+  /* Centered modal — same glass-card aesthetic as the side panels. */
+  #modal,.modal-host{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.45);backdrop-filter:blur(4px);
+    -webkit-backdrop-filter:blur(4px);z-index:100}
+  #modal.on,.modal-host.on{display:flex}
+  .modal-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    padding:20px 22px;width:300px;text-align:center}
+  .modal-card h3{margin:0 0 8px;font-size:13px;color:var(--text);font-weight:600;
+    letter-spacing:.02em}
+  .modal-card p{margin:0 0 16px;color:var(--muted);font-size:12px;line-height:1.5}
+  .modal-actions{display:flex;justify-content:center;gap:8px}
+  .modal-actions button{margin:0;width:96px;padding:7px 0}
+  .modal-actions button.primary{border-color:var(--accent);color:var(--accent);
+    background:linear-gradient(180deg,rgba(124,242,193,.14),rgba(124,242,193,.06))}
+  /* Snip-tool overlay (rendered above panels and canvas). */
+  #snipLayer{position:fixed;inset:0;cursor:crosshair;z-index:200;
+    background:rgba(0,0,0,.55);user-select:none}
+  #snipHint{position:absolute;top:20px;left:50%;transform:translateX(-50%);
+    color:var(--text);background:var(--panel);padding:8px 14px;border-radius:10px;
+    border:1px solid var(--ring);box-shadow:var(--shadow);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    font-size:11px;letter-spacing:.06em;pointer-events:none}
+  #snipRect{position:absolute;display:none;border:1.5px solid var(--accent);
+    background:rgba(124,242,193,.08);box-shadow:0 0 0 9999px rgba(0,0,0,.55)}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <h1>pix<b>pat</b></h1>
+    <div class="tag">pixel pattern designer · png / svg</div>
+
+    <div class="section">
+      <h2>Color</h2>
+      <div class="swatch">
+        <input id="bg" type="color" value="#0d0e10">
+        <button id="swap" class="swap" title="Swap colors">⇄</button>
+        <input id="fg" type="color" value="#e7e9ee">
+      </div>
+      <label class="chk" style="margin-top:8px"><input id="fill" type="checkbox" checked> fill cells</label>
+    </div>
+
+    <div class="section">
+      <h2>Shape</h2>
+      <!-- Every shape is a polygon preset that loads into the customPts
+           buffer; the editor below is always available for tweaks. The last
+           tile (↑) opens a file picker — uploaded image is traced into a
+           polygon and used as the cell shape. -->
+      <div class="shape-grid" id="shapePresets">
+        <button data-p="square"      title="Square">▢</button>
+        <button data-p="circle"      title="Circle">○</button>
+        <button data-p="diamond"     title="Diamond">◇</button>
+        <button data-p="cross"       title="Cross / plus">✚</button>
+        <button data-p="dot"         title="Centered dot">•</button>
+        <button data-p="tri"         title="Triangle">▲</button>
+        <button data-p="tri2"        title="Two triangles">▲▼</button>
+        <button data-p="bar"         title="Rectangular bar">▬</button>
+        <button data-p="hex"         title="Hexagon">⬣</button>
+        <button id="shapeUploadBtn"  title="Upload image as shape">↑</button>
+      </div>
+      <input id="shapeUploadFile" type="file" accept="image/*" style="display:none">
+      <details class="fold" id="shapeEditFold">
+        <summary>Edit shape</summary>
+        <div class="body" id="customBox">
+          <div class="row" style="margin:0"><label>Angle</label>
+            <input id="customAngle" type="range" min="0" max="180" value="0" step="1">
+            <input class="v" id="customAngleV" type="number" min="0" max="180" step="1"></div>
+          <canvas id="shapeEd" width="240" height="240"
+            style="width:100%;aspect-ratio:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-top:6px;display:block;cursor:crosshair"></canvas>
+          <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.35">
+            Click to add a vertex · drag (Ctrl: snap) · dbl-click to remove · shift+click to start a new sub-shape · <b id="vCount" style="color:var(--text)">0</b> vertices
+          </div>
+          <div class="row" style="margin-top:6px"><label>Vertices</label>
+            <input id="vertResample" type="range" min="3" max="128" value="32" step="1">
+            <input class="v" id="vertResampleV" type="number" min="3" max="128" step="1"></div>
+          <label class="chk" style="margin-top:6px;display:flex;align-items:center;gap:6px">
+            <input id="liveCorner" type="checkbox"> Live corners (per-vertex roundness)
+          </label>
+          <div class="seg two">
+            <button id="shapeClear" class="danger">Clear</button>
+            <button id="shapeClose">Toggle closed</button>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="section">
+      <h2>Geometry</h2>
+      <div class="row"><label>Scale</label>
+        <input id="scale" type="range" min="0.1" max="1.5" value="0.23" step="0.01">
+        <input class="v" id="scaleV" type="number" min="0.1" max="1.5" step="0.01"></div>
+      <div class="row"><label>Zoom</label>
+        <input id="size" type="range" min="4" max="120" value="42" step="1">
+        <input class="v" id="sizeV" type="number" min="4" max="120" step="1"></div>
+      <div class="row" id="cornerRow"><label>Round corner</label>
+        <input id="corner" type="range" min="0" max="50" value="0" step="1">
+        <input class="v" id="cornerV" type="number" min="0" max="50" step="1"></div>
+      <div class="row"><label>Stroke</label>
+        <input id="stroke" type="range" min="0" max="6" value="0" step="0.1">
+        <input class="v" id="strokeV" type="number" min="0" max="6" step="0.1"></div>
+    </div>
+
+    <div class="section">
+      <h2>Tile offset</h2>
+      <select id="tileType">
+        <option value="regular" selected>Regular grid</option>
+        <option value="brick-row">Brick by row</option>
+        <option value="brick-col">Brick by column</option>
+        <option value="radial">Radial (concentric rings)</option>
+      </select>
+      <details class="fold">
+        <summary>Cell offsets</summary>
+        <div class="body">
+          <div class="row" style="margin:0"><label>H:</label>
+            <input id="tileOffsetX" type="range" min="-1" max="1" value="0" step="0.01">
+            <input class="v" id="tileOffsetXV" type="number" min="-1" max="1" step="0.01"></div>
+          <div class="row"><label>V:</label>
+            <input id="tileOffsetY" type="range" min="-1" max="1" value="0" step="0.01">
+            <input class="v" id="tileOffsetYV" type="number" min="-1" max="1" step="0.01"></div>
+        </div>
+      </details>
+      <!-- Radial-tile controls — visible only when tileType === 'radial'. -->
+      <div id="radialBox" style="display:none;margin-top:6px">
+        <div class="row" style="margin-top:0"><label>Spacing</label>
+          <input id="radialSpacing" type="range" min="0.3" max="3" value="0.82" step="0.01">
+          <input class="v" id="radialSpacingV" type="number" min="0.3" max="3" step="0.01"></div>
+        <div class="row"><label>Density</label>
+          <input id="radialDensity" type="range" min="0.3" max="3" value="0.97" step="0.01">
+          <input class="v" id="radialDensityV" type="number" min="0.3" max="3" step="0.01"></div>
+        <div class="row"><label>Twist</label>
+          <input id="radialTwist" type="range" min="0" max="2" value="0" step="0.01">
+          <input class="v" id="radialTwistV" type="number" min="0" max="2" step="0.01"></div>
+        <div class="row"><label>Orient</label>
+          <input id="radialOrient" type="range" min="0" max="360" value="198" step="1">
+          <input class="v" id="radialOrientV" type="number" min="0" max="360" step="1"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Presets</h2>
+      <select id="presetList" title="Pick a preset to load"></select>
+      <div class="seg two" style="margin-top:6px">
+        <button id="presetSave">Save current</button>
+        <button id="presetDelete" class="danger">Delete</button>
+      </div>
+      <!-- Download / Import are hidden for now; the wiring is still active so
+           we can re-enable them later with display:flex. -->
+      <div class="seg two" id="presetIO" style="display:none">
+        <button id="presetExport">Download .json</button>
+        <button id="presetImport">Import .json</button>
+      </div>
+      <input id="presetFile" type="file" accept=".json,application/json" style="display:none">
+    </div>
+
+    <div class="section">
+      <h2>Reference image</h2>
+      <!-- Native file input is hidden; the styled label below opens it. -->
+      <input id="imgFile" type="file" accept="image/*" style="display:none">
+      <label for="imgFile" class="fileBtn" id="imgFileLabel">Upload file</label>
+      <!-- Per-image controls only appear once an image is loaded. -->
+      <div id="imgControls" style="display:none">
+        <div class="row" style="margin-top:6px"><label>Opacity</label>
+          <input id="imgOpacity" type="range" min="0" max="1" value="0.5" step="0.01">
+          <input class="v" id="imgOpacityV" type="number" min="0" max="1" step="0.01"></div>
+        <div class="row"><label>Scale</label>
+          <input id="imgScale" type="range" min="0.05" max="5" value="1" step="0.01">
+          <input class="v" id="imgScaleV" type="number" min="0.05" max="5" step="0.01"></div>
+        <label class="chk" style="margin-bottom:4px"><input id="imgVisible" type="checkbox" checked> visible</label>
+        <label class="chk" style="margin-bottom:4px"><input id="imgLocked" type="checkbox" checked> locked (uncheck to drag)</label>
+        <button id="imgRemove" class="danger">Remove image</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Export</h2>
+      <div style="display:flex;gap:6px;align-items:stretch">
+        <select id="pngScale" style="flex:1;min-width:0">
+          <option value="1">1×</option>
+          <option value="2" selected>2×</option>
+          <option value="3">3×</option>
+          <option value="4">4×</option>
+          <option value="6">6×</option>
+          <option value="8">8×</option>
+        </select>
+        <button id="png" style="flex:0 0 auto;width:auto;margin:0;padding:6px 14px">PNG</button>
+        <button id="svg" style="flex:0 0 auto;width:auto;margin:0;padding:6px 14px">SVG</button>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <canvas id="c"></canvas>
+    <div id="toolTag">PEN — click: corner point · click+drag: smooth point · near existing path: add vertex · Enter/dbl-click finish · click first vertex to close</div>
+    <div id="gradTag">GRADIENT — drag A→B · A end = 0, B end = full strength</div>
+    <div id="hud">click <b>add/select</b> · drag <b>move</b> · alt+drag <b>duplicate</b> · right-click <b>delete</b> · wheel <b>zoom</b> · shift+wheel <b>radius</b> · space+drag <b>pan</b> · ctrl+z <b>undo</b> · ctrl+d <b>dup</b></div>
+    <div id="zoomTag">100%</div>
+  </main>
+
+  <aside class="right">
+    <h1>Attractors</h1>
+    <div class="tag">each attractor has independent settings</div>
+
+    <div class="section">
+      <h2>Tool <span id="selPill" class="pill">none selected</span></h2>
+      <div class="seg" id="atool" style="grid-template-columns:repeat(5,1fr)">
+        <button data-t="point" class="on">Point</button>
+        <button data-t="ellipse">Ellipse</button>
+        <button data-t="box">Box</button>
+        <button data-t="pen">Pen</button>
+        <button data-t="gradient">Grad</button>
+      </div>
+      <label class="chk" style="margin-top:6px"><input id="lockAdd" type="checkbox"> lock — clicks won't create new attractors</label>
+    </div>
+
+    <div class="section">
+      <h2>View</h2>
+      <label class="chk" style="margin-bottom:6px"><input id="mute" type="checkbox"> mute attractors</label>
+      <label class="chk" style="margin-bottom:6px"><input id="hideA" type="checkbox"> hide attractors (keep effect)</label>
+      <button id="resetView">Reset zoom &amp; pan</button>
+    </div>
+
+    <div class="section">
+      <h2>Mode</h2>
+      <div class="seg" id="amode" style="grid-template-columns:repeat(3,1fr)">
+        <button data-m="scale" class="on">scale</button>
+        <button data-m="hole">hole</button>
+        <button data-m="halftone" title="Cells grow toward the attractor up to the grid slot — never overlap">halftone</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Values</h2>
+      <div class="row"><label>Strength</label>
+        <input id="aStrength" type="range" min="-1" max="1" value="-1" step="0.01">
+        <input class="v" id="aStrengthV" type="number" min="-1" max="1" step="0.01"></div>
+      <div class="row"><label>Radius</label>
+        <input id="aFalloff" type="range" min="20" max="1200" value="420" step="2">
+        <input class="v" id="aFalloffV" type="number" min="20" max="1200" step="2"></div>
+      <!-- Ellipse-only: visual size of the shape (rx/ry), independent of the
+           field-falloff radius above. Hidden until an ellipse is selected. -->
+      <div class="row" id="ellipseSizeRow" style="display:none"><label>Size</label>
+        <input id="aEllipseSize" type="range" min="5" max="2000" value="100" step="2">
+        <input class="v" id="aEllipseSizeV" type="number" min="5" max="2000" step="2"></div>
+      <!-- Box-only: per-attractor box size (uniform w/h scale via slider).
+           Independent of the field-falloff Radius above. -->
+      <div class="row" id="boxSizeRow" style="display:none"><label>Size</label>
+        <input id="aBoxSize" type="range" min="5" max="2000" value="100" step="2">
+        <input class="v" id="aBoxSizeV" type="number" min="5" max="2000" step="2"></div>
+      <!-- Box-only: per-attractor corner radius. Rounds the rectangle's
+           corners — applies to box (and pen) shapes, not circle/gradient. -->
+      <div class="row" id="boxCornerRow" style="display:none"><label>Corner</label>
+        <input id="aCornerR" type="range" min="0" max="500" value="0" step="1">
+        <input class="v" id="aCornerRV" type="number" min="0" max="500" step="1"></div>
+      <div class="row"><label>Pull</label>
+        <input id="aPull" type="range" min="-1" max="1" value="0" step="0.01">
+        <input class="v" id="aPullV" type="number" min="-1" max="1" step="0.01"></div>
+      <label class="chk" style="margin-top:4px"><input id="aMagLock" type="checkbox" checked> magnet locked to center</label>
+      <button id="resetMag" style="margin-top:-2px" title="Reset magnetic anchor to the geometry centroid">↻ reset magnet to center</button>
+      <label id="aInvertedRow" class="chk" style="margin-top:4px;display:none"><input id="aInverted" type="checkbox" checked> invert gradient direction</label>
+      <label id="aSolidRow" class="chk" style="margin-top:4px;display:none"><input id="aSolid" type="checkbox" checked> solid (whole shape attracts)</label>
+      <div class="row"><label>Curve</label>
+        <input id="aCurve" type="range" min="0.3" max="4" value="1.7" step="0.05">
+        <input class="v" id="aCurveV" type="number" min="0.3" max="4" step="0.05"></div>
+    </div>
+
+    <div class="section">
+      <h2>List</h2>
+      <div id="aList" class="aList"></div>
+      <div style="color:var(--muted);font-size:11px;margin-top:6px;line-height:1.35">
+        Shift+click to add to selection · select 2+ to use Align
+      </div>
+
+      <div style="margin-top:10px">
+        <button id="alignCenters" disabled>Align centers</button>
+        <button id="closePath">Close pen path</button>
+        <button id="clearA" class="danger">Clear all attractors</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Centered modal used for image-upload guidance + future yes/no prompts. -->
+  <div id="modal">
+    <div class="modal-card">
+      <h3 id="modalTitle"></h3>
+      <p id="modalBody"></p>
+      <div class="modal-actions">
+        <button id="modalCancel">Cancel</button>
+        <button id="modalOk" class="primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export-region picker. Three modes: whole canvas, attractors only, or
+       a user-defined snip rectangle. Format (PNG/SVG) is set before opening. -->
+  <div id="exportModal" class="modal-host">
+    <div class="modal-card" style="width:300px">
+      <h3 id="exportTitle">Export</h3>
+      <p>Choose what to export</p>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button id="expWhole">Whole canvas</button>
+        <button id="expAttr">Attractors only</button>
+        <button id="expSnip">Snip area…</button>
+      </div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button id="expCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Snip overlay — drag to define the export rectangle. Esc to cancel. -->
+  <div id="snipLayer" style="display:none">
+    <div id="snipHint">Drag to select export area · Esc to cancel</div>
+    <div id="snipRect"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+const TAU = Math.PI*2;
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;
+  return((t^t>>>14)>>>0)/4294967296}}
+const smooth = t => t*t*(3-2*t);
+const clamp  = (v,a,b) => v<a?a:v>b?b:v;
+const lerp   = (a,b,t) => a+(b-a)*t;
+
+function hexToRgb(h){
+  h=h.replace('#','');
+  if(h.length===3) h=h.split('').map(c=>c+c).join('');
+  const n=parseInt(h,16);
+  return [(n>>16)&255,(n>>8)&255,n&255];
+}
+function rgbToHex(r,g,b){
+  const h=v=>Math.round(clamp(v,0,255)).toString(16).padStart(2,'0');
+  return '#'+h(r)+h(g)+h(b);
+}
+function mixHex(a,b,t){
+  const A=hexToRgb(a), B=hexToRgb(b);
+  return rgbToHex(lerp(A[0],B[0],t), lerp(A[1],B[1],t), lerp(A[2],B[2],t));
+}
+
+const S = {
+  shape:'dot', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
+  radialSpacing:0.82, radialDensity:0.97, radialTwist:0, radialOrient:198,
+  customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
+  size:42, scale:0.23, corner:0, stroke:0,
+  attractors:[], selected:-1,
+  tool:'point', draft:null, mouseW:[0,0],
+  aMode:'scale', aStrength:-1, aFalloff:420, aPull:0, aCurve:1.7, aEllipseSize:100,
+  bg:'#0d0e10', fg:'#e7e9ee', fill:true,
+  muteAttractors:false, hideAttractors:false, liveCorner:false,
+  zoom:1, panX:0, panY:0,
+  w:0, h:0, dpr:Math.min(2, devicePixelRatio||1),
+  spaceDown:false, shiftDown:false,
+  history:[], redo:[], lastWheelPushAt:0,
+  // Reference image (drawn above the pixel grid). Lives outside the snapshot
+  // pipeline since the loaded image element + binary data don't belong in
+  // undo history; only its on/off + transform are user-facing controls.
+  image:{ el:null, x:0, y:0, w:0, h:0, naturalW:0, naturalH:0, scale:1, opacity:0.5, visible:true, locked:true },
+  lockAdd:false,
+};
+
+const SNAP_KEYS = ['shape','tileType','tileOffsetX','tileOffsetY',
+  'radialSpacing','radialDensity','radialTwist','radialOrient',
+  'customPts','customClosed','customAngle',
+  'size','scale','corner','stroke',
+  'bg','fg','fill','attractors','selected'];
+const UI_CONTROLS = {
+  shape:'shape', tileType:'tileType', tileOffsetX:'tileOffsetX', tileOffsetY:'tileOffsetY',
+  radialSpacing:'radialSpacing', radialDensity:'radialDensity',
+  radialTwist:'radialTwist', radialOrient:'radialOrient',
+  customAngle:'customAngle',
+  size:'size', scale:'scale', corner:'corner', stroke:'stroke',
+  bg:'bg', fg:'fg', fill:'fill',
+};
+
+// ---------- undo / redo ----------
+function snapshot(){
+  const o = {};
+  for(const k of SNAP_KEYS) o[k] = S[k];
+  return JSON.stringify(o);
+}
+function pushHistory(snap){
+  const s = snap || snapshot();
+  if(S.history.length && S.history[S.history.length-1]===s) return;
+  S.history.push(s);
+  if(S.history.length>200) S.history.shift();
+  S.redo.length = 0;
+}
+function applySnapshot(json){
+  const o = JSON.parse(json);
+  for(const k of SNAP_KEYS) if(k in o) S[k] = o[k];
+  // sync UI controls to new state
+  for(const key in UI_CONTROLS){
+    const el = $(UI_CONTROLS[key]); if(!el) continue;
+    if(el.type === 'checkbox') el.checked = !!S[key];
+    else el.value = S[key];
+    const vEl = $(UI_CONTROLS[key]+'V');
+    if(vEl) vEl.value = (typeof S[key]==='number') ? S[key] : S[key];
+  }
+  if(typeof S.selected === 'number') selectAttractor(S.selected);
+  renderAList();
+  if(typeof syncShapeUI === 'function') syncShapeUI();
+  draw();
+}
+function undo(){ if(!S.history.length) return; S.redo.push(snapshot()); applySnapshot(S.history.pop()); }
+function redoFn(){ if(!S.redo.length) return; S.history.push(snapshot()); applySnapshot(S.redo.pop()); }
+
+const cnv = $('c'); let ctx = cnv.getContext('2d');
+
+let _centered = false;
+function resize(){
+  const r = cnv.getBoundingClientRect();
+  S.w = r.width; S.h = r.height;
+  cnv.width  = Math.round(r.width  * S.dpr);
+  cnv.height = Math.round(r.height * S.dpr);
+  ctx.setTransform(S.dpr,0,0,S.dpr,0,0);
+  if(!_centered){ S.panX = S.w/2; S.panY = S.h/2; _centered = true; }
+  draw();
+}
+addEventListener('resize', resize);
+
+function screenToWorld(sx,sy){ return [(sx - S.panX)/S.zoom, (sy - S.panY)/S.zoom]; }
+function viewBounds(){
+  return { x0:(0 - S.panX)/S.zoom, y0:(0 - S.panY)/S.zoom,
+           x1:(S.w - S.panX)/S.zoom, y1:(S.h - S.panY)/S.zoom };
+}
+
+// ---------- distance helpers ----------
+// Quantise the direction from `from` to `to` to the nearest multiple of
+// `stepDeg` while preserving the distance — used for the pen tool's
+// shift-snap (the "next click is straight / 45° / perpendicular to the
+// previous one" behaviour you get in Illustrator).
+function snapToAxisStep(from, to, stepDeg){
+  const dx = to[0] - from[0], dy = to[1] - from[1];
+  const len = Math.hypot(dx, dy);
+  if(len < 1e-6) return [from[0], from[1]];
+  const step = stepDeg * Math.PI / 180;
+  const snapped = Math.round(Math.atan2(dy, dx) / step) * step;
+  return [from[0] + Math.cos(snapped) * len, from[1] + Math.sin(snapped) * len];
+}
+
+function distToSeg(px,py, ax,ay, bx,by){
+  const dx=bx-ax, dy=by-ay;
+  const l2 = dx*dx+dy*dy;
+  if(l2===0) return [Math.hypot(px-ax,py-ay), ax, ay];
+  let t = ((px-ax)*dx + (py-ay)*dy)/l2;
+  t = clamp(t,0,1);
+  const cx = ax+t*dx, cy = ay+t*dy;
+  return [Math.hypot(px-cx, py-cy), cx, cy];
+}
+function nearestOnPoly(px,py, pts, closed){
+  let bd=Infinity, bx=pts[0][0], by=pts[0][1];
+  const n = pts.length;
+  const segs = closed ? n : n-1;
+  for(let i=0;i<segs;i++){
+    const a=pts[i], b=pts[(i+1)%n];
+    const [d,cx,cy] = distToSeg(px,py, a[0],a[1], b[0],b[1]);
+    if(d<bd){ bd=d; bx=cx; by=cy; }
+  }
+  return [bd, bx, by];
+}
+
+// ---------- attractor field ----------
+function gradientProject(a, x, y){
+  const ax=a.a[0], ay=a.a[1], bx=a.b[0], by=a.b[1];
+  const dx=bx-ax, dy=by-ay;
+  const l2 = dx*dx+dy*dy;
+  if(l2===0) return [0, ax, ay, Math.hypot(x-ax,y-ay)];
+  let t = ((x-ax)*dx + (y-ay)*dy)/l2;
+  t = clamp(t,0,1);
+  const qx = ax+t*dx, qy = ay+t*dy;
+  return [t, qx, qy, Math.hypot(x-qx, y-qy)];
+}
+
+// Flatten a pen bezier path to a polyline for distance + field sampling
+function flattenBezier(nodes, closed, steps){
+  steps = steps || 18;
+  const out = [];
+  const n = nodes.length;
+  if(n<2) return out;
+  const segs = closed ? n : n-1;
+  for(let i=0;i<segs;i++){
+    const a = nodes[i], b = nodes[(i+1)%n];
+    const p0=a.p, p3=b.p;
+    const p1=[p0[0]+a.hOut[0], p0[1]+a.hOut[1]];
+    const p2=[p3[0]+b.hIn[0],  p3[1]+b.hIn[1]];
+    for(let k=(i===0?0:1); k<=steps; k++){
+      const t=k/steps, u=1-t, uu=u*u, tt=t*t;
+      const x = uu*u*p0[0] + 3*uu*t*p1[0] + 3*u*tt*p2[0] + tt*t*p3[0];
+      const y = uu*u*p0[1] + 3*uu*t*p1[1] + 3*u*tt*p2[1] + tt*t*p3[1];
+      out.push([x,y]);
+    }
+  }
+  return out;
+}
+
+function ellipseNormDist(a, x, y){
+  const dx=x-a.x, dy=y-a.y;
+  const c=Math.cos(-a.rot), s=Math.sin(-a.rot);
+  const u=(dx*c - dy*s)/a.rx;
+  const v=(dx*s + dy*c)/a.ry;
+  return Math.hypot(u, v); // 1.0 = on ellipse boundary
+}
+
+// Build a closed polygon for a box attractor. Sharp corners → 4 points;
+// rounded corners → arc-sampled corners. Used by the field (distance-to-poly)
+// and the canvas renderer so both stay in sync.
+function flattenBox(a, steps){
+  steps = steps || 8;
+  const pts = [];
+  const c = Math.cos(a.rot||0), s = Math.sin(a.rot||0);
+  const hw = a.w/2, hh = a.h/2;
+  const cr = Math.min(a.cornerR||0, hw, hh);
+  const tx = (lx, ly) => [a.x + c*lx - s*ly, a.y + s*lx + c*ly];
+  if(cr <= 0.01){
+    pts.push(tx(-hw,-hh)); pts.push(tx( hw,-hh));
+    pts.push(tx( hw, hh)); pts.push(tx(-hw, hh));
+    return pts;
+  }
+  // Order: TR corner, BR, BL, TL — each corner sweeps a quarter arc.
+  const corners = [
+    [ hw-cr,-hh+cr, -Math.PI/2,  0          ],
+    [ hw-cr, hh-cr,  0,          Math.PI/2  ],
+    [-hw+cr, hh-cr,  Math.PI/2,  Math.PI    ],
+    [-hw+cr,-hh+cr,  Math.PI,    3*Math.PI/2],
+  ];
+  for(const [ccx, ccy, a0, a1] of corners){
+    for(let k=0; k<=steps; k++){
+      const t = a0 + (a1-a0)*(k/steps);
+      pts.push(tx(ccx + Math.cos(t)*cr, ccy + Math.sin(t)*cr));
+    }
+  }
+  return pts;
+}
+function isInsideBox(x, y, a){
+  const c = Math.cos(-(a.rot||0)), s = Math.sin(-(a.rot||0));
+  const lx = (x-a.x)*c - (y-a.y)*s;
+  const ly = (x-a.x)*s + (y-a.y)*c;
+  const hw = a.w/2, hh = a.h/2;
+  if(Math.abs(lx) > hw || Math.abs(ly) > hh) return false;
+  const cr = Math.min(a.cornerR||0, hw, hh);
+  if(cr <= 0.01) return true;
+  // Corner cut-out: in the rounded-corner region, only count as "inside" if
+  // we're within the corner arc — so the field falloff follows the rounded
+  // outline, not the rectangular AABB.
+  const ax = Math.abs(lx), ay = Math.abs(ly);
+  if(ax <= hw - cr || ay <= hh - cr) return true;
+  const dx = ax - (hw - cr), dy = ay - (hh - cr);
+  return dx*dx + dy*dy <= cr*cr;
+}
+
+function flattenEllipse(a, steps){
+  steps = steps || 64;
+  const out = [];
+  const c=Math.cos(a.rot), s=Math.sin(a.rot);
+  for(let k=0;k<steps;k++){
+    const t = k/steps * TAU;
+    const x = Math.cos(t)*a.rx, y = Math.sin(t)*a.ry;
+    out.push([a.x + c*x - s*y, a.y + s*x + c*y]);
+  }
+  return out;
+}
+
+function fields(x,y){
+  const out = {scale:0, hole:0, halftone:0, px:0, py:0};
+  if(S.muteAttractors) return out;
+  for(const a of S.attractors){
+    if(a.muted) continue;
+    let v, t, d;
+    if(a.type==='gradient'){
+      let gt;
+      [gt,,,d] = gradientProject(a, x, y);
+      if(d >= a.r) continue;
+      let e = 1 - d/a.r;
+      e = Math.pow(e, a.curve); e = smooth(e);
+      // Inverted (default true): full strength at A, fades to 0 at B.
+      // Off: full strength at B, 0 at A.
+      const dir = (a.inverted !== false) ? (1 - gt) : gt;
+      v = a.strength * dir * e;
+      t = e;                          // pull magnitude follows the radial falloff
+    } else if(a.type==='ellipse'){
+      const flat = a._flat || (a._flat = flattenEllipse(a));
+      // Solid (default): inside the shape = full strength, outside falls off.
+      // Edge-only (solid === false): peak at the edge, fades both directions.
+      if(a.solid !== false && ellipseNormDist(a, x, y) <= 1){ d = 0; }
+      else { d = nearestOnPoly(x, y, flat, true)[0]; }
+      if(d >= a.r) continue;
+      t = 1 - d/a.r;
+      t = Math.pow(t, a.curve); t = smooth(t);
+      v = a.strength * t;
+    } else if(a.type==='box'){
+      const flat = a._flat || (a._flat = flattenBox(a));
+      // Same Solid / Edge-only rule as ellipse.
+      if(a.solid !== false && isInsideBox(x, y, a)){ d = 0; }
+      else { d = nearestOnPoly(x, y, flat, true)[0]; }
+      if(d >= a.r) continue;
+      t = 1 - d/a.r;
+      t = Math.pow(t, a.curve); t = smooth(t);
+      v = a.strength * t;
+    } else {
+      if(a.type==='pen'){
+        const flat = a._flat || (a._flat = flattenBezier(a.nodes, a.closed));
+        if(flat.length<2) continue;
+        d = nearestOnPoly(x,y, flat, a.closed)[0];
+      } else d = Math.hypot(x-a.x, y-a.y);
+      if(d >= a.r) continue;
+      t = 1 - d/a.r;
+      t = Math.pow(t, a.curve); t = smooth(t);
+      v = a.strength * t;
+    }
+    out[a.mode] += v;
+    // Magnetic pull: cell shifts toward (positive) or away from (negative)
+    // the attractor's anchor point (default = geometry centroid, user-draggable).
+    // Closer cells get pulled a larger fraction of their distance.
+    const pull = a.pull || 0;
+    if(pull && t > 0){
+      const m = magPoint(a);
+      out.px += (m[0] - x) * pull * t;
+      out.py += (m[1] - y) * pull * t;
+    }
+  }
+  out.scale    = clamp(out.scale,    -1, 1);
+  out.hole     = clamp(out.hole,     -1, 1);
+  out.halftone = clamp(out.halftone, -1, 1);
+  return out;
+}
+
+function invalidateFlat(a){ if(a && (a.type==='pen' || a.type==='ellipse' || a.type==='box')) delete a._flat; }
+function invalidateAllFlat(){ for(const a of S.attractors) invalidateFlat(a); }
+
+// ---------- magnetic-pull anchor ----------
+// Each attractor has an editable `mag` point (the magnetic anchor) that the
+// Pull effect draws cells toward. Default = centroid of the attractor's
+// geometry; user can drag it freely on the canvas.
+function attractorCentroid(a){
+  if(a.type==='pen' && a.nodes && a.nodes.length){
+    let sx=0, sy=0;
+    for(const nd of a.nodes){ sx+=nd.p[0]; sy+=nd.p[1]; }
+    return [sx/a.nodes.length, sy/a.nodes.length];
+  }
+  if(a.type==='gradient'){
+    return [(a.a[0]+a.b[0])/2, (a.a[1]+a.b[1])/2];
+  }
+  // point + ellipse share an explicit center
+  return [a.x, a.y];
+}
+function magPoint(a){
+  // When the magnet is locked to the centroid (default), the anchor always
+  // tracks the shape's geometric center even as the geometry changes.
+  if(a.magLocked !== false){ return attractorCentroid(a); }
+  if(!a.mag){ a.mag = attractorCentroid(a); }
+  return a.mag;
+}
+
+// Axis-aligned world bounding box for pen / ellipse attractors.
+function attractorBBox(a){
+  if(a.type==='pen'){
+    if(!a.nodes.length) return null;
+    let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+    for(const nd of a.nodes){
+      if(nd.p[0]<x0) x0=nd.p[0]; if(nd.p[1]<y0) y0=nd.p[1];
+      if(nd.p[0]>x1) x1=nd.p[0]; if(nd.p[1]>y1) y1=nd.p[1];
+    }
+    return {x0,y0,x1,y1};
+  }
+  if(a.type==='ellipse'){
+    // bbox of rotated ellipse: hw = sqrt(rx² cos²θ + ry² sin²θ), similarly for hh
+    const c=Math.cos(a.rot), s=Math.sin(a.rot);
+    const hw = Math.sqrt(a.rx*a.rx*c*c + a.ry*a.ry*s*s);
+    const hh = Math.sqrt(a.rx*a.rx*s*s + a.ry*a.ry*c*c);
+    return {x0:a.x-hw, y0:a.y-hh, x1:a.x+hw, y1:a.y+hh};
+  }
+  if(a.type==='box'){
+    const c=Math.cos(a.rot||0), s=Math.sin(a.rot||0);
+    const hw = (Math.abs(a.w/2)*Math.abs(c) + Math.abs(a.h/2)*Math.abs(s));
+    const hh = (Math.abs(a.w/2)*Math.abs(s) + Math.abs(a.h/2)*Math.abs(c));
+    return {x0:a.x-hw, y0:a.y-hh, x1:a.x+hw, y1:a.y+hh};
+  }
+  return null;
+}
+
+function bboxCorners(bb){
+  // 0:TL 1:TR 2:BR 3:BL
+  return [[bb.x0,bb.y0],[bb.x1,bb.y0],[bb.x1,bb.y1],[bb.x0,bb.y1]];
+}
+
+// Build an SVG path-data string for a closed polygon with rounded corners.
+// `P` is points already in pixel coords. `cr` is the corner radius (px).
+// Each corner is replaced by a circular arc tangent to both adjacent edges
+// using SVG's A command. Per-corner radius is auto-clamped so it can never
+// exceed half the shorter adjacent edge — the shape can't fold over itself.
+function roundedPolygonSVG(P, cr){
+  const n = P.length;
+  let d = '';
+  for(let i=0;i<n;i++){
+    const prev = P[(i-1+n)%n], cur = P[i], next = P[(i+1)%n];
+    const v1x = prev[0]-cur[0], v1y = prev[1]-cur[1];
+    const v2x = next[0]-cur[0], v2y = next[1]-cur[1];
+    const l1 = Math.hypot(v1x, v1y) || 1;
+    const l2 = Math.hypot(v2x, v2y) || 1;
+    const u1x = v1x/l1, u1y = v1y/l1;
+    const u2x = v2x/l2, u2y = v2y/l2;
+    const dot = clamp(u1x*u2x + u1y*u2y, -1, 1);
+    const ang = Math.acos(dot);                  // interior corner angle
+    const tanHalf = Math.tan(ang/2) || 1e-6;
+    // Distance from the corner along each adjacent edge to the tangent point.
+    // Clamp so the rounded corner can't eat more than half of either edge.
+    const t = Math.min(cr / tanHalf, l1/2, l2/2);
+    const er = t * tanHalf;                      // effective radius after clamp
+    const p1x = cur[0] + u1x*t, p1y = cur[1] + u1y*t;   // arc entry point
+    const p2x = cur[0] + u2x*t, p2y = cur[1] + u2y*t;   // arc exit point
+    if(i===0) d += 'M' + p1x.toFixed(2) + ' ' + p1y.toFixed(2);
+    else      d += ' L' + p1x.toFixed(2) + ' ' + p1y.toFixed(2);
+    // sweep flag: SVG y is down, so a clockwise turn (negative cross) → sweep=0
+    const cross = u1x*u2y - u1y*u2x;
+    const sweep = cross < 0 ? 0 : 1;
+    d += ' A' + er.toFixed(2) + ' ' + er.toFixed(2) + ' 0 0 ' + sweep + ' ' +
+         p2x.toFixed(2) + ' ' + p2y.toFixed(2);
+  }
+  return d + ' Z';
+}
+// Convenience used by the custom-shape renderer: scales unit-cell points by SS first.
+// Per-vertex radius (sub[k][2]) overrides the global cr when present.
+function roundedSubpathSVG(sub, SS, cr){
+  const P = sub.map(p => [p[0]*SS, p[1]*SS]);
+  const live = S.liveCorner;
+  const radii = sub.map(p => (live && p.length === 3) ? Math.max(0, p[2]*SS) : cr);
+  const n = P.length;
+  if(n < 3) return '';
+  const E = []; // entries
+  const X = []; // exits
+  const R = []; // effective radii
+  const W = []; // sweep flag (cross sign)
+  for(let i=0;i<n;i++){
+    const prev = P[(i-1+n)%n], cur = P[i], next = P[(i+1)%n];
+    const v1x = prev[0]-cur[0], v1y = prev[1]-cur[1];
+    const v2x = next[0]-cur[0], v2y = next[1]-cur[1];
+    const l1 = Math.hypot(v1x,v1y) || 1, l2 = Math.hypot(v2x,v2y) || 1;
+    const u1x=v1x/l1, u1y=v1y/l1, u2x=v2x/l2, u2y=v2y/l2;
+    const dot = clamp(u1x*u2x+u1y*u2y, -1, 1);
+    const ang = Math.acos(dot);
+    const tanHalf = Math.tan(ang/2) || 1e-6;
+    const t = Math.min(radii[i]/tanHalf, l1/2, l2/2);
+    const er = t * tanHalf;
+    E.push([cur[0]+u1x*t, cur[1]+u1y*t]);
+    X.push([cur[0]+u2x*t, cur[1]+u2y*t]);
+    R.push(er);
+    W.push(u1x*u2y - u1y*u2x);
+  }
+  let d = 'M' + E[0][0].toFixed(2) + ' ' + E[0][1].toFixed(2);
+  for(let i=0;i<n;i++){
+    if(R[i] > 0.5){
+      const sweep = W[i] < 0 ? 0 : 1;
+      d += ' A' + R[i].toFixed(2) + ' ' + R[i].toFixed(2) + ' 0 0 ' + sweep +
+           ' ' + X[i][0].toFixed(2) + ' ' + X[i][1].toFixed(2);
+    }
+    const ne = E[(i+1)%n];
+    d += ' L' + ne[0].toFixed(2) + ' ' + ne[1].toFixed(2);
+  }
+  return d + ' Z';
+}
+
+// Stroke (and fill) a closed rounded polygon onto a canvas context.
+// Uses ctx.arcTo, which auto-clamps the corner radius to fit each pair of
+// adjacent edges — the corner never overshoots into the opposite side.
+// Falls back to sharp lines when the requested radius is effectively zero.
+function strokePolyRounded(ctx, pts, cr){
+  const n = pts.length;
+  if(n < 2) return;
+  if(cr <= 0.5 || n < 3){
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for(let k=1;k<n;k++) ctx.lineTo(pts[k][0], pts[k][1]);
+    ctx.closePath();
+    return;
+  }
+  // Start mid-edge so the first arcTo has a valid tangent direction.
+  const last = pts[n-1], first = pts[0];
+  ctx.moveTo((last[0]+first[0])/2, (last[1]+first[1])/2);
+  for(let k=0;k<n;k++){
+    const cur = pts[k], nxt = pts[(k+1)%n];
+    ctx.arcTo(cur[0], cur[1], nxt[0], nxt[1], cr);
+  }
+  ctx.closePath();
+}
+
+// Split a customPts array (which may contain null markers) into a list of
+// sub-paths, dropping the null separators. Used by both the canvas renderer
+// and the SVG exporter so they produce identical multi-polygon output.
+function splitNullSubpaths(pts){
+  const out = []; let cur = [];
+  for(const p of pts){
+    if(p === null){
+      if(cur.length) out.push(cur);
+      cur = [];
+    } else cur.push(p);
+  }
+  if(cur.length) out.push(cur);
+  return out;
+}
+
+// ---------- pixel grid draw ----------
+function cellShape(ctx, cx, cy, s, rot, corner, shape){
+  ctx.save();
+  ctx.translate(cx, cy);
+  if(rot) ctx.rotate(rot);
+  const half = s/2;
+  ctx.beginPath();
+  // All shapes (including the formerly hard-coded square/circle/diamond/
+  // cross/dot) live in S.customPts now. cellShape just walks the polygon.
+  const pts = S.customPts;
+  if(!pts || pts.length<2){ ctx.restore(); return; }
+  // null entries mark a moveTo, so a single customPts can describe
+  // multiple disjoint sub-shapes (e.g. two triangles).
+  const subs = splitNullSubpaths(pts);
+  const cr = clamp(corner, 0, half);
+  // Per-vertex r override: cur[2] is in cell-half units (0..0.5). Scale to px.
+  // Ignored entirely when the Live Corners toggle is off, so the global slider
+  // alone controls roundness.
+  const live = S.liveCorner;
+  const vertexCr = (v) => (live && v.length === 3) ? clamp(v[2]*s, 0, half) : cr;
+  const hasAnyVertexR = live && pts.some(p => p && p.length === 3 && p[2] > 0);
+  for(const sub of subs){
+    if(sub.length < 2) continue;
+    if((cr <= 0.5 && !hasAnyVertexR) || sub.length < 3 || !S.customClosed){
+      for(let k=0;k<sub.length;k++){
+        const x = sub[k][0]*s, y = sub[k][1]*s;
+        if(k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      if(S.customClosed) ctx.closePath();
+    } else {
+      // Rounded corners via arcTo. Start mid-edge so the first arcTo has
+      // a valid tangent direction.
+      const n = sub.length;
+      const last = sub[n-1], first = sub[0];
+      ctx.moveTo(((last[0]+first[0])/2)*s, ((last[1]+first[1])/2)*s);
+      for(let k=0;k<n;k++){
+        const cur = sub[k], nxt = sub[(k+1)%n];
+        ctx.arcTo(cur[0]*s, cur[1]*s, nxt[0]*s, nxt[1]*s, vertexCr(cur));
+      }
+      ctx.closePath();
+    }
+  }
+  if(S.fill) ctx.fill();
+  if(S.stroke>0) ctx.stroke();
+  ctx.restore();
+}
+
+// Render one cell at world (cx, cy). Shared by both the orthogonal grid and
+// the radial layout below.
+function renderGridCell(cx, cy, baseCorner, sp, s){
+  const f = fields(cx, cy);
+  const scale = clamp(1 + f.scale, 0, 2);
+  let fillColor = S.fg;
+  if(f.hole < -0.02) return;
+  if(f.hole !== 0){
+    const t = clamp((f.hole+1)/2, 0, 1);
+    fillColor = mixHex(fillColor, S.bg, 1 - t);
+  }
+  let sz = s * Math.max(0.02, scale) * sp;
+  if(f.halftone > 0)      sz = lerp(sz, s * scale,  f.halftone);
+  else if(f.halftone < 0) sz = lerp(sz, 0,         -f.halftone);
+  if(sz <= 0.5) return;
+  ctx.fillStyle = fillColor;
+  ctx.strokeStyle = fillColor;
+  cellShape(ctx, cx+f.px, cy+f.py, sz, 0, baseCorner*sz, S.shape);
+}
+
+function drawGrid(){
+  const s = S.size;            // world px per cell
+  const vb = viewBounds();
+  const sp = S.scale;
+  const baseCorner = (S.corner/100); // 0..0.5 of half
+
+  // Radial: concentric rings of cells around world (0,0). Each ring's count
+  // scales with its circumference, and a golden-ratio angular offset per ring
+  // gives every ring a unique starting point — produces the phyllotactic /
+  // sunburst arrangement seen on the Nest device.
+  if(S.tileType === 'radial'){
+    const golden = Math.PI * (3 - Math.sqrt(5));   // ≈ 137.5° in radians
+    const step    = s * (S.radialSpacing || 1);
+    const density = S.radialDensity || 1;
+    const twist   = S.radialTwist == null ? 1 : S.radialTwist;
+    const orient  = (S.radialOrient || 0) * Math.PI / 180;
+    const maxR = Math.max(
+      Math.hypot(vb.x0, vb.y0), Math.hypot(vb.x1, vb.y0),
+      Math.hypot(vb.x0, vb.y1), Math.hypot(vb.x1, vb.y1)
+    ) + step;
+    renderGridCell(0, 0, baseCorner, sp, s);       // center seed
+    for(let ring=1; ring*step <= maxR; ring++){
+      const ringR = ring*step;
+      const count = Math.max(3, Math.round(((TAU*ringR)/s) * density));
+      const startA = orient + ring * golden * twist;
+      for(let k=0; k<count; k++){
+        const a = startA + (k/count) * TAU;
+        const cx = Math.cos(a) * ringR;
+        const cy = Math.sin(a) * ringR;
+        if(cx < vb.x0-s || cx > vb.x1+s || cy < vb.y0-s || cy > vb.y1+s) continue;
+        renderGridCell(cx, cy, baseCorner, sp, s);
+      }
+    }
+    return;
+  }
+
+  const i0 = Math.floor(vb.x0/s)-1, i1 = Math.ceil(vb.x1/s)+1;
+  const j0 = Math.floor(vb.y0/s)-1, j1 = Math.ceil(vb.y1/s)+1;
+  for(let j=j0;j<j1;j++){
+    for(let i=i0;i<i1;i++){
+      let cx = i*s + s/2, cy = j*s + s/2;
+      if(S.tileType==='brick-row' && (j&1)) cx += s/2;
+      if(S.tileType==='brick-col' && (i&1)) cy += s/2;
+      if(S.tileOffsetX && (j&1)) cx += S.tileOffsetX * s;
+      if(S.tileOffsetY && (i&1)) cy += S.tileOffsetY * s;
+      renderGridCell(cx, cy, baseCorner, sp, s);
+    }
+  }
+}
+
+// ---------- draw ----------
+function draw(){
+  ctx.setTransform(S.dpr,0,0,S.dpr,0,0);
+  ctx.fillStyle = S.bg;
+  ctx.fillRect(0,0,S.w,S.h);
+
+  ctx.setTransform(S.dpr,0,0,S.dpr,0,0);
+  ctx.translate(S.panX, S.panY);
+  ctx.scale(S.zoom, S.zoom);
+  ctx.lineWidth = S.stroke / S.zoom;
+  drawGrid();
+
+  // Reference image: drawn above the pattern (so the user can trace) but
+  // below the attractor handles so they remain interactable.
+  if(S.image.el && S.image.visible){
+    ctx.save();
+    ctx.globalAlpha = clamp(S.image.opacity, 0, 1);
+    ctx.drawImage(S.image.el, S.image.x, S.image.y, S.image.w, S.image.h);
+    ctx.restore();
+  }
+
+  if(!S.hideAttractors){
+    drawAttractors();
+    drawDraft();
+    drawFreeTransform();
+  }
+
+  ctx.setTransform(S.dpr,0,0,S.dpr,0,0);
+  $('zoomTag').textContent = Math.round(S.zoom*100)+'%';
+}
+
+function drawFreeTransform(){
+  if(S.selected<0) return;
+  const a = S.attractors[S.selected];
+  if(!a || (a.type!=='pen' && a.type!=='ellipse')) return;
+  const bb = attractorBBox(a);
+  if(!bb) return;
+  ctx.save();
+  ctx.strokeStyle = '#ff7a59';
+  ctx.globalAlpha = 0.65;
+  ctx.lineWidth = 1/S.zoom;
+  ctx.setLineDash([4/S.zoom, 3/S.zoom]);
+  ctx.strokeRect(bb.x0, bb.y0, bb.x1-bb.x0, bb.y1-bb.y0);
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#0d0e10';
+  ctx.strokeStyle = '#ff7a59';
+  ctx.lineWidth = 1.5/S.zoom;
+  const h = 5/S.zoom;
+  for(const [cx,cy] of bboxCorners(bb)){
+    ctx.fillRect(cx-h, cy-h, h*2, h*2);
+    ctx.strokeRect(cx-h, cy-h, h*2, h*2);
+  }
+  ctx.restore();
+}
+
+function drawAttractors(){
+  for(let i=0;i<S.attractors.length;i++){
+    const a = S.attractors[i];
+    const sel = i===S.selected;
+    const col = sel ? '#ff7a59' : '#7cf2c1';
+    ctx.save();
+    if(a.type==='pen'){
+      const nodes = a.nodes, n = nodes.length;
+      const segs = a.closed ? n : n-1;
+      const drawCurve = () => {
+        ctx.beginPath();
+        ctx.moveTo(nodes[0].p[0], nodes[0].p[1]);
+        for(let k=0;k<segs;k++){
+          const A = nodes[k], B = nodes[(k+1)%n];
+          ctx.bezierCurveTo(
+            A.p[0]+A.hOut[0], A.p[1]+A.hOut[1],
+            B.p[0]+B.hIn[0],  B.p[1]+B.hIn[1],
+            B.p[0], B.p[1]
+          );
+        }
+        if(a.closed) ctx.closePath();
+      };
+      if(n>=2){
+        // influence band
+        ctx.strokeStyle = col;
+        ctx.globalAlpha = 0.12;
+        ctx.lineWidth = 2*a.r;
+        ctx.lineCap='round'; ctx.lineJoin='round';
+        drawCurve(); ctx.stroke();
+        // path line
+        ctx.globalAlpha = sel ? 0.95 : 0.7;
+        ctx.lineWidth = 1.5/S.zoom;
+        drawCurve(); ctx.stroke();
+      }
+      // handles (only when selected)
+      if(sel){
+        ctx.globalAlpha = 0.65;
+        ctx.lineWidth = 1/S.zoom;
+        ctx.strokeStyle = col;
+        for(const nd of nodes){
+          [['hIn',nd.hIn],['hOut',nd.hOut]].forEach(([,h]) => {
+            if(h[0]===0 && h[1]===0) return;
+            ctx.beginPath();
+            ctx.moveTo(nd.p[0], nd.p[1]);
+            ctx.lineTo(nd.p[0]+h[0], nd.p[1]+h[1]);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(nd.p[0]+h[0], nd.p[1]+h[1], 3/S.zoom, 0, TAU);
+            ctx.stroke();
+          });
+        }
+      }
+      // vertices
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 1;
+      for(const nd of nodes){
+        ctx.beginPath(); ctx.arc(nd.p[0], nd.p[1], 3.5/S.zoom, 0, TAU); ctx.fill();
+      }
+    } else if(a.type==='ellipse'){
+      ctx.save();
+      ctx.translate(a.x, a.y);
+      ctx.rotate(a.rot);
+      // influence ellipse
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = sel ? 0.6 : 0.35;
+      ctx.lineWidth = (sel?1.5:1)/S.zoom;
+      ctx.beginPath();
+      ctx.ellipse(0,0, a.rx, a.ry, 0, 0, TAU);
+      ctx.stroke();
+      // center dot
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(0,0, 4/S.zoom, 0, TAU); ctx.fill();
+      if(sel){
+        // axis lines + endpoint handles
+        ctx.globalAlpha = 0.7;
+        ctx.lineWidth = 1/S.zoom;
+        ctx.beginPath(); ctx.moveTo(-a.rx,0); ctx.lineTo(a.rx,0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,-a.ry); ctx.lineTo(0,a.ry); ctx.stroke();
+        ctx.globalAlpha = 1;
+        [[a.rx,0],[0,a.ry]].forEach(([x,y])=>{
+          ctx.beginPath(); ctx.arc(x,y, 4/S.zoom, 0, TAU); ctx.fill();
+        });
+      }
+      ctx.restore();
+    } else if(a.type==='box'){
+      ctx.save();
+      ctx.translate(a.x, a.y);
+      ctx.rotate(a.rot||0);
+      const hw = a.w/2, hh = a.h/2;
+      const cr = Math.min(a.cornerR||0, hw, hh);
+      const drawRect = () => {
+        ctx.beginPath();
+        if(cr <= 0.01){
+          ctx.rect(-hw, -hh, a.w, a.h);
+        } else {
+          // Rounded corners via arcTo (canvas).
+          ctx.moveTo(-hw+cr, -hh);
+          ctx.lineTo(hw-cr, -hh); ctx.arcTo(hw,-hh, hw,-hh+cr, cr);
+          ctx.lineTo(hw, hh-cr);  ctx.arcTo(hw, hh, hw-cr, hh, cr);
+          ctx.lineTo(-hw+cr, hh); ctx.arcTo(-hw,hh,-hw, hh-cr, cr);
+          ctx.lineTo(-hw,-hh+cr); ctx.arcTo(-hw,-hh,-hw+cr,-hh, cr);
+          ctx.closePath();
+        }
+      };
+      // influence band: thick stroke whose width = 2*r so the line edge
+      // marks the field-falloff boundary.
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = 0.12;
+      ctx.lineWidth = 2*a.r;
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      drawRect(); ctx.stroke();
+      // box outline
+      ctx.globalAlpha = sel ? 0.95 : 0.7;
+      ctx.lineWidth = 1.5/S.zoom;
+      drawRect(); ctx.stroke();
+      // center dot
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(0,0, 4/S.zoom, 0, TAU); ctx.fill();
+      ctx.restore();
+    } else if(a.type==='gradient'){
+      const [ax,ay] = a.a, [bx,by] = a.b;
+      const dx=bx-ax, dy=by-ay, len=Math.hypot(dx,dy)||1;
+      const nx=-dy/len, ny=dx/len;
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = 0.12;
+      ctx.lineWidth = 2*a.r;
+      ctx.lineCap='butt';
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+      ctx.globalAlpha = sel ? 1 : 0.75;
+      ctx.lineWidth = 1.5/S.zoom;
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 1/S.zoom;
+      const ticks = 8;
+      for(let k=1;k<=ticks;k++){
+        const t = k/ticks;
+        const px = ax + dx*t, py = ay + dy*t;
+        const tickLen = (a.r*0.6) * t;
+        ctx.beginPath();
+        ctx.moveTo(px - nx*tickLen, py - ny*tickLen);
+        ctx.lineTo(px + nx*tickLen, py + ny*tickLen);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = col;
+      const ah = 10/S.zoom;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx - dx/len*ah - nx*ah*0.5, by - dy/len*ah - ny*ah*0.5);
+      ctx.lineTo(bx - dx/len*ah + nx*ah*0.5, by - dy/len*ah + ny*ah*0.5);
+      ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 1.5/S.zoom;
+      ctx.strokeStyle = col;
+      ctx.beginPath(); ctx.arc(ax,ay, 5/S.zoom, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(bx,by, 4/S.zoom, 0, TAU); ctx.fill();
+    } else {
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = sel ? 0.6 : 0.35;
+      ctx.lineWidth = (sel?1.5:1)/S.zoom;
+      ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(a.x, a.y, 4/S.zoom, 0, TAU); ctx.fill();
+    }
+
+    // Magnetic-anchor handle (visible on the selected attractor only,
+    // and only when the magnet is unlocked from the centroid — otherwise
+    // there is nothing to drag because the anchor tracks geometry).
+    if(sel && a.magLocked === false){
+      const m = magPoint(a);
+      const rOuter = 6/S.zoom, rInner = 3/S.zoom, arm = 8/S.zoom;
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1.25/S.zoom;
+      ctx.strokeStyle = '#7cf2c1';
+      ctx.fillStyle   = '#0d0e10';
+      ctx.beginPath(); ctx.arc(m[0], m[1], rOuter, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#7cf2c1';
+      ctx.beginPath(); ctx.arc(m[0], m[1], rInner, 0, TAU); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(m[0]-arm, m[1]); ctx.lineTo(m[0]-rOuter-1/S.zoom, m[1]);
+      ctx.moveTo(m[0]+rOuter+1/S.zoom, m[1]); ctx.lineTo(m[0]+arm, m[1]);
+      ctx.moveTo(m[0], m[1]-arm); ctx.lineTo(m[0], m[1]-rOuter-1/S.zoom);
+      ctx.moveTo(m[0], m[1]+rOuter+1/S.zoom); ctx.lineTo(m[0], m[1]+arm);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function drawDraft(){
+  if(!S.draft) return;
+  const d = S.draft;
+  const nodes = d.nodes;
+  ctx.save();
+  ctx.strokeStyle = '#7cf2c1';
+  ctx.fillStyle = '#7cf2c1';
+  ctx.lineWidth = 1.2/S.zoom;
+
+  // draw committed bezier segments solid
+  if(nodes.length>=2){
+    ctx.beginPath();
+    ctx.moveTo(nodes[0].p[0], nodes[0].p[1]);
+    for(let k=0;k<nodes.length-1;k++){
+      const A = nodes[k], B = nodes[k+1];
+      ctx.bezierCurveTo(
+        A.p[0]+A.hOut[0], A.p[1]+A.hOut[1],
+        B.p[0]+B.hIn[0],  B.p[1]+B.hIn[1],
+        B.p[0], B.p[1]
+      );
+    }
+    ctx.stroke();
+  }
+  // dashed preview from last node to cursor
+  if(nodes.length){
+    const last = nodes[nodes.length-1];
+    let target = [S.mouseW[0], S.mouseW[1]];
+    // Mirror the shift-snap from the click handler so the preview line
+    // shows where the next vertex will actually land.
+    if(S.shiftDown) target = snapToAxisStep(last.p, target, 45);
+    ctx.setLineDash([6/S.zoom, 4/S.zoom]);
+    ctx.beginPath();
+    ctx.moveTo(last.p[0]+last.hOut[0], last.p[1]+last.hOut[1]);
+    ctx.lineTo(target[0], target[1]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  // handles on nodes
+  for(const nd of nodes){
+    [nd.hIn, nd.hOut].forEach(h => {
+      if(h[0]===0 && h[1]===0) return;
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(nd.p[0], nd.p[1]);
+      ctx.lineTo(nd.p[0]+h[0], nd.p[1]+h[1]);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(nd.p[0]+h[0], nd.p[1]+h[1], 3/S.zoom, 0, TAU);
+      ctx.stroke();
+    });
+  }
+  ctx.globalAlpha = 1;
+  for(const nd of nodes){
+    ctx.beginPath(); ctx.arc(nd.p[0], nd.p[1], 4/S.zoom, 0, TAU); ctx.fill();
+  }
+  // highlight first vertex when close (to close the path)
+  if(nodes.length>1){
+    const [fx,fy] = nodes[0].p;
+    const dist = Math.hypot(S.mouseW[0]-fx, S.mouseW[1]-fy);
+    if(dist*S.zoom < 12){
+      ctx.strokeStyle='#ff7a59';
+      ctx.lineWidth=2/S.zoom;
+      ctx.beginPath(); ctx.arc(fx,fy, 7/S.zoom, 0, TAU); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+// ---------- bindings ----------
+function bindRange(id, key, fmt=v=>v, onChange){
+  const el = $(id), v = $(id+'V');
+  const apply = (n, fromNum) => {
+    if(isNaN(n)) return;
+    const min = parseFloat(el.min), max = parseFloat(el.max);
+    const before = n;
+    if(!isNaN(min)) n = Math.max(min, n);
+    if(!isNaN(max)) n = Math.min(max, n);
+    S[key] = n;
+    if(fromNum){
+      el.value = n;
+      // If the typed value was outside the slider's range, snap the display
+      // too so the .v field can never sit at a value the slider can't reach.
+      if(before !== n) v.value = fmt(n);
+    } else {
+      v.value = fmt(n);
+    }
+    if(onChange) onChange(n);
+    draw();
+  };
+  el.addEventListener('input', () => apply(parseFloat(el.value), false));
+  v.addEventListener('input',  () => apply(parseFloat(v.value),  true));
+  v.addEventListener('change', () => { v.value = fmt(S[key]); });
+  apply(parseFloat(el.value), false);
+}
+bindRange('size','size', v=>v.toFixed(0));
+bindRange('scale','scale', v=>v.toFixed(2));
+bindRange('corner','corner', v=>v.toFixed(0));
+bindRange('stroke','stroke', v=>v.toFixed(1));
+bindRange('tileOffsetX','tileOffsetX', v=>v.toFixed(2));
+bindRange('tileOffsetY','tileOffsetY', v=>v.toFixed(2));
+bindRange('radialSpacing','radialSpacing', v=>v.toFixed(2));
+bindRange('radialDensity','radialDensity', v=>v.toFixed(2));
+bindRange('radialTwist','radialTwist',     v=>v.toFixed(2));
+bindRange('radialOrient','radialOrient',   v=>v.toFixed(0));
+bindRange('aStrength','aStrength', v=>v.toFixed(2), v=>{
+  if(S.selected>=0 && S.attractors[S.selected]){
+    S.attractors[S.selected].strength = v;
+    renderAList();
+  }
+});
+bindRange('aFalloff','aFalloff', v=>v.toFixed(0), v=>{
+  const a = S.attractors[S.selected]; if(!a) return;
+  a.r = v;
+});
+// Ellipse-only: scale rx/ry uniformly while preserving aspect ratio.
+// `v` is the new average radius; we map current (rx+ry)/2 → v.
+bindRange('aEllipseSize','aEllipseSize', v=>v.toFixed(0), v=>{
+  const a = S.attractors[S.selected]; if(!a || a.type!=='ellipse') return;
+  const cur = Math.max(1, (a.rx + a.ry) / 2);
+  const k = v / cur;
+  a.rx = Math.max(1, a.rx * k);
+  a.ry = Math.max(1, a.ry * k);
+  invalidateFlat(a);
+});
+bindRange('aPull','aPull', v=>v.toFixed(2), v=>{
+  if(S.selected>=0 && S.attractors[S.selected]) S.attractors[S.selected].pull = v;
+});
+bindRange('aCurve','aCurve', v=>v.toFixed(2), v=>{
+  if(S.selected>=0 && S.attractors[S.selected]) S.attractors[S.selected].curve = v;
+});
+
+// Shape is no longer a select — every shape is a polygon preset chosen via
+// the icon row. See loadShapePreset() / shapePresets click handler.
+function syncShapeUI(){
+  // Editor stays visible for every shape now; this hook just exists so
+  // applySnapshot/applyPresetState can call it to refresh the icon highlight
+  // and editor preview after a state load. Both helpers live further down
+  // in the script (TDZ for the editor's `sEd` const), so this function is
+  // only safe to call AFTER the custom-shape-editor section has executed.
+  if(typeof syncShapeIcon === 'function') syncShapeIcon();
+  if(typeof drawEditor === 'function') drawEditor();
+  if(typeof syncRadialBoxVisibility === 'function') syncRadialBoxVisibility();
+}
+// (No early call here — the editor's sEd const isn't initialized yet.)
+
+// ---------- presets ----------
+// What gets captured in a preset: everything the user chose visually except
+// view (zoom/pan), reference image, transient UI flags, and history.
+const PRESET_KEYS = ['shape','tileType','tileOffsetX','tileOffsetY',
+  'radialSpacing','radialDensity','radialTwist','radialOrient',
+  'customPts','customClosed','customAngle',
+  'size','scale','corner','stroke',
+  'bg','fg','fill','attractors'];
+const PRESET_VERSION = 1;
+const LS_KEY = 'pixpat.presets.v1';
+
+function getPresetState(){
+  const o = {};
+  for(const k of PRESET_KEYS) o[k] = JSON.parse(JSON.stringify(S[k]));
+  return o;
+}
+function applyPresetState(state){
+  pushHistory();
+  for(const k of PRESET_KEYS){
+    if(k in state) S[k] = JSON.parse(JSON.stringify(state[k]));
+  }
+  invalidateAllFlat();
+  selectAttractor(-1);
+  // Sync UI controls to the loaded state.
+  for(const key in UI_CONTROLS){
+    const el = $(UI_CONTROLS[key]); if(!el) continue;
+    if(el.type === 'checkbox') el.checked = !!S[key];
+    else el.value = S[key];
+    const vEl = $(UI_CONTROLS[key]+'V');
+    if(vEl) vEl.value = S[key];
+  }
+  syncShapeUI();
+  renderAList();
+  draw();
+}
+
+function loadUserPresets(){
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; }
+  catch(e){ return {}; }
+}
+function saveUserPresets(map){
+  try { localStorage.setItem(LS_KEY, JSON.stringify(map)); }
+  catch(e){ alert('Could not save preset — localStorage is full or disabled.'); }
+}
+
+// Tiny inline starter library. Add more by saving and exporting a preset,
+// then pasting its `state` block into this object.
+const BUILT_IN_PRESETS = {
+  "Halftone radial": {
+    state: {
+      shape:'square', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
+      customPts:[[-0.5,-0.5],[0.5,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
+      size:30, scale:0.25, corner:30, stroke:0,
+      bg:'#f1e4c9', fg:'#0d0e10', fill:true,
+      attractors:[{
+        type:'point', x:0, y:0, r:520, pull:0,
+        mode:'halftone', strength:1, curve:1.6, mag:[0,0]
+      }]
+    }
+  },
+  "Diamond shrink center": {
+    state: {
+      shape:'diamond', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
+      customPts:[[0,-0.5],[0.5,0],[0,0.5],[-0.5,0]], customClosed:true, customAngle:0,
+      size:34, scale:0.55, corner:0, stroke:0,
+      bg:'#0d0e10', fg:'#f1e4c9', fill:true,
+      attractors:[{
+        type:'point', x:0, y:0, r:380, pull:0,
+        mode:'scale', strength:-1, curve:1.4, mag:[0,0]
+      }]
+    }
+  },
+  "Bar weave": {
+    state: {
+      shape:'bar', tileType:'brick-row', tileOffsetX:0, tileOffsetY:0,
+      customPts:[[-0.45,-0.1],[0.45,-0.1],[0.45,0.1],[-0.45,0.1]], customClosed:true, customAngle:0,
+      size:38, scale:0.8, corner:0, stroke:0,
+      bg:'#f1e4c9', fg:'#1f3a55', fill:true,
+      attractors:[]
+    }
+  },
+};
+
+function presetExists(name){
+  if(BUILT_IN_PRESETS[name]) return 'builtin';
+  if(loadUserPresets()[name]) return 'user';
+  return null;
+}
+function rebuildPresetList(selectName){
+  const sel = $('presetList');
+  sel.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = ''; placeholder.textContent = '— select preset —';
+  sel.appendChild(placeholder);
+
+  const groupBuiltIn = document.createElement('optgroup');
+  groupBuiltIn.label = 'Built-in';
+  for(const name of Object.keys(BUILT_IN_PRESETS)){
+    const o = document.createElement('option');
+    o.value = 'b:' + name; o.textContent = name;
+    groupBuiltIn.appendChild(o);
+  }
+  sel.appendChild(groupBuiltIn);
+
+  const userMap = loadUserPresets();
+  const userNames = Object.keys(userMap).sort();
+  if(userNames.length){
+    const groupUser = document.createElement('optgroup');
+    groupUser.label = 'My presets';
+    for(const name of userNames){
+      const o = document.createElement('option');
+      o.value = 'u:' + name; o.textContent = name;
+      groupUser.appendChild(o);
+    }
+    sel.appendChild(groupUser);
+  }
+
+  if(selectName){
+    sel.value = selectName;
+    if(sel.value !== selectName) sel.value = '';
+  }
+}
+rebuildPresetList();
+
+$('presetList').addEventListener('change', e => {
+  const v = e.target.value;
+  if(!v) return;
+  const [kind, name] = [v[0], v.slice(2)];
+  const entry = kind === 'b' ? BUILT_IN_PRESETS[name] : loadUserPresets()[name];
+  if(!entry) return;
+  applyPresetState(entry.state);
+});
+
+$('presetSave').addEventListener('click', () => {
+  const suggested = (() => {
+    const v = $('presetList').value;
+    return v && v[0]==='u' ? v.slice(2) : '';
+  })();
+  const name = (prompt('Preset name:', suggested) || '').trim();
+  if(!name) return;
+  if(BUILT_IN_PRESETS[name]){
+    alert('That name is reserved by a built-in preset. Pick another.');
+    return;
+  }
+  const map = loadUserPresets();
+  if(map[name] && !confirm(`Overwrite "${name}"?`)) return;
+  map[name] = { version: PRESET_VERSION, state: getPresetState() };
+  saveUserPresets(map);
+  rebuildPresetList('u:' + name);
+});
+
+$('presetDelete').addEventListener('click', () => {
+  const v = $('presetList').value;
+  if(!v || v[0] !== 'u'){
+    alert('Select one of your saved presets to delete.');
+    return;
+  }
+  const name = v.slice(2);
+  if(!confirm(`Delete "${name}"?`)) return;
+  const map = loadUserPresets();
+  delete map[name];
+  saveUserPresets(map);
+  rebuildPresetList();
+});
+
+$('presetExport').addEventListener('click', () => {
+  const v = $('presetList').value;
+  let name = 'pixpat-preset';
+  if(v && v[0] === 'u') name = v.slice(2);
+  else if(v && v[0] === 'b') name = v.slice(2);
+  const blob = new Blob([JSON.stringify({
+    type: 'pixpat-preset',
+    version: PRESET_VERSION,
+    name,
+    state: getPresetState(),
+  }, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.download = `${name.replace(/[^a-z0-9-_ ]/gi,'_')}.json`;
+  link.href = URL.createObjectURL(blob);
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+});
+
+$('presetImport').addEventListener('click', () => $('presetFile').click());
+$('presetFile').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      // Accept either a {state: {...}} envelope or a flat preset state object.
+      const state = (data && data.state) ? data.state : data;
+      if(!state || typeof state !== 'object') throw new Error('invalid');
+      applyPresetState(state);
+      // Offer to save the imported preset under its name (if provided).
+      const nm = (data && data.name) || '';
+      if(nm && !BUILT_IN_PRESETS[nm] && confirm(`Save imported preset as "${nm}" in your library?`)){
+        const map = loadUserPresets();
+        map[nm] = { version: PRESET_VERSION, state };
+        saveUserPresets(map);
+        rebuildPresetList('u:' + nm);
+      }
+    } catch(err){
+      alert('That file is not a valid pixpat preset.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = ''; // allow re-importing the same file later
+});
+
+// Inject a reset (↻) button next to every slider+value row so each control
+// can be returned to its original HTML default in one click. Reads the
+// slider's `defaultValue` (the `value=` attribute as written in markup) and
+// re-fires the input event so existing handlers (state updates, redraws,
+// per-attractor side effects) all run.
+document.querySelectorAll('.row').forEach(row => {
+  if(row.dataset.noReset === 'true') return;     // opt-out for paired controls
+  if(row.querySelector('button.reset')) return;
+  const slider = row.querySelector('input[type=range]');
+  const valBox = row.querySelector('input.v');
+  if(!slider) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'reset';
+  btn.textContent = '↻';
+  btn.title = 'Reset to default';
+  btn.addEventListener('click', () => {
+    slider.value = slider.defaultValue;
+    if(valBox && valBox.defaultValue !== '') valBox.value = slider.defaultValue;
+    slider.dispatchEvent(new Event('input', {bubbles:true}));
+  });
+  row.appendChild(btn);
+});
+
+// ---------- custom shape editor ----------
+const sEd = $('shapeEd'); const sCtx = sEd.getContext('2d');
+// All shapes — including the formerly hard-coded square/circle/diamond/cross/
+// dot — live here as polygon presets. cellShape always renders S.customPts,
+// so picking an icon is just "load this polygon, optionally tweak vertices".
+function makeCirclePts(r, n){
+  const pts = [];
+  for(let k=0;k<n;k++){
+    const a = -Math.PI/2 + k * TAU/n;
+    pts.push([Math.cos(a)*r, Math.sin(a)*r]);
+  }
+  return pts;
+}
+const SHAPE_PRESETS = {
+  square:  { closed:true, pts:[[-0.5,-0.5],[0.5,-0.5],[0.5,0.5],[-0.5,0.5]] },
+  circle:  { closed:true, pts: makeCirclePts(0.5, 16) },
+  diamond: { closed:true, pts:[[0,-0.5],[0.5,0],[0,0.5],[-0.5,0]] },
+  cross:   { closed:true, pts:[
+    [-0.16,-0.5],[0.16,-0.5],[0.16,-0.16],[0.5,-0.16],
+    [0.5,0.16],[0.16,0.16],[0.16,0.5],[-0.16,0.5],
+    [-0.16,0.16],[-0.5,0.16],[-0.5,-0.16],[-0.16,-0.16]
+  ] },
+  dot:     { closed:true, pts: makeCirclePts(0.225, 24) },
+  tri:     { closed:true, pts:[[0,-0.5],[0.5,0.4],[-0.5,0.4]] },
+  tri2:    { closed:true, pts:[
+    [0,-0.45], [-0.35,-0.05], [0.35,-0.05],
+    null,
+    [0, 0.45], [ 0.35, 0.05], [-0.35, 0.05]
+  ] },
+  bar:     { closed:true, pts:[[-0.45,-0.1],[0.45,-0.1],[0.45,0.1],[-0.45,0.1]] },
+  hex:     { closed:true, pts:(()=>{
+    // Regular (equilateral) pointy-top hexagon inscribed in the cell — six
+    // vertices on a circle of radius 0.5 at 60° intervals, starting from
+    // the top. Equal edge lengths and rotational symmetry.
+    const a=[]; for(let k=0;k<6;k++){ const t=-Math.PI/2 + k*TAU/6;
+      a.push([Math.cos(t)*0.5, Math.sin(t)*0.5]); } return a;
+  })() },
+  houndstooth: { closed:true, pts:[
+    [-0.5,-0.25],[-0.25,-0.25],[-0.25,-0.5],[ 0.25,-0.5],
+    [ 0.00,-0.25],[ 0.50,-0.25],[ 0.50, 0.25],[ 0.25, 0.25],
+    [ 0.25, 0.50],[-0.25, 0.50],[ 0.00, 0.25],[-0.50, 0.25]
+  ] },
+};
+
+function loadShapePreset(name, opts){
+  const p = SHAPE_PRESETS[name]; if(!p) return;
+  if(!opts || !opts.skipHistory) pushHistory();
+  S.shape = name;
+  S.customPts = p.pts.map(q => q === null ? null : q.slice());
+  S.customClosed = p.closed;
+  S.customAngle = 0;
+  activeSub = -1;
+  S.corner = 0;                       // every fresh shape starts crisp
+  $('customAngle').value = 0;
+  $('customAngleV').value = 0;
+  $('corner').value = 0;
+  $('cornerV').value = 0;
+  syncShapeIcon();
+  drawEditor();
+  draw();
+  if(typeof syncVertexCountSlider === 'function') syncVertexCountSlider();
+}
+function syncShapeIcon(){
+  document.querySelectorAll('#shapePresets button').forEach(b =>
+    b.classList.toggle('on', b.dataset.p === S.shape));
+}
+document.querySelectorAll('#shapePresets button').forEach(b=>{
+  if(b.id === 'shapeUploadBtn') return;
+  b.addEventListener('click', () => loadShapePreset(b.dataset.p));
+});
+syncShapeIcon();
+
+// ---------- image → custom shape ----------
+// User uploads an image; we threshold it to a binary mask, trace the outer
+// contour with Moore-neighbour following, downsample to ~64 vertices, then
+// normalize to the cell-half coord space ([-0.5, 0.5]) and load into
+// S.customPts. Result is editable in the shape editor like any preset.
+function imageToShapePts(img){
+  const sz = 128;
+  const cv = document.createElement('canvas');
+  cv.width = sz; cv.height = sz;
+  const ictx = cv.getContext('2d');
+  ictx.fillStyle = '#fff'; ictx.fillRect(0,0,sz,sz);
+  // Fit image inside sz×sz, preserving aspect.
+  const sc = Math.min(sz/img.width, sz/img.height);
+  const dw = img.width*sc, dh = img.height*sc;
+  ictx.drawImage(img, (sz-dw)/2, (sz-dh)/2, dw, dh);
+  const id = ictx.getImageData(0,0,sz,sz).data;
+  const mask = new Uint8Array(sz*sz);
+  // 'in' = opaque AND dark — silhouette pixels.
+  for(let i=0;i<sz*sz;i++){
+    const a = id[i*4+3];
+    const lum = (id[i*4]+id[i*4+1]+id[i*4+2])/3;
+    mask[i] = (a > 128 && lum < 200) ? 1 : 0;
+  }
+  // First 'in' pixel scanning row-major → guaranteed boundary point.
+  let start = -1;
+  for(let i=0; i<sz*sz; i++){ if(mask[i]){ start = i; break; } }
+  if(start < 0) return null;
+  const startX = start % sz, startY = (start/sz)|0;
+  // Moore-neighbour boundary following. Directions clockwise from west.
+  const dirs = [[-1,0],[-1,-1],[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1]];
+  const at = (x,y) => (x>=0 && y>=0 && x<sz && y<sz && mask[y*sz+x] === 1);
+  const path = [[startX, startY]];
+  let cx = startX, cy = startY, prev = 6; // came from south
+  const maxSteps = sz*sz*4;
+  for(let step=0; step<maxSteps; step++){
+    let found = false;
+    for(let i=1; i<=8; i++){
+      const d = (prev + i) % 8;
+      const nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+      if(at(nx, ny)){
+        cx = nx; cy = ny;
+        path.push([cx, cy]);
+        prev = (d + 4) % 8;
+        found = true;
+        break;
+      }
+    }
+    if(!found) break;
+    if(cx === startX && cy === startY && path.length > 2) break;
+  }
+  if(path.length < 4) return null;
+  // Down-sample to ~64 evenly spaced vertices.
+  const target = 64;
+  const out = [];
+  const step = Math.max(1, Math.floor(path.length / target));
+  for(let i=0; i<path.length; i += step) out.push(path[i]);
+  if(out.length < 4) return null;
+  // Normalize to [-0.5, 0.5] preserving aspect (longer dim → 1.0 across).
+  let xMin=Infinity, xMax=-Infinity, yMin=Infinity, yMax=-Infinity;
+  for(const [x,y] of out){
+    if(x<xMin) xMin=x; if(x>xMax) xMax=x;
+    if(y<yMin) yMin=y; if(y>yMax) yMax=y;
+  }
+  const m = Math.max(xMax-xMin, yMax-yMin) || 1;
+  const cxN = (xMin+xMax)/2, cyN = (yMin+yMax)/2;
+  return out.map(([x,y]) => [(x - cxN)/m, (y - cyN)/m]);
+}
+// Centered confirm dialog. Returns a Promise<boolean>.
+function showModal(title, body){
+  return new Promise(resolve => {
+    $('modalTitle').textContent = title;
+    $('modalBody').textContent  = body;
+    $('modal').classList.add('on');
+    const ok = $('modalOk'), cancel = $('modalCancel');
+    const finish = (result) => {
+      $('modal').classList.remove('on');
+      ok.removeEventListener('click', onOk);
+      cancel.removeEventListener('click', onCancel);
+      resolve(result);
+    };
+    const onOk     = () => finish(true);
+    const onCancel = () => finish(false);
+    ok.addEventListener('click', onOk);
+    cancel.addEventListener('click', onCancel);
+  });
+}
+$('shapeUploadBtn').addEventListener('click', async () => {
+  const ok = await showModal(
+    'Upload pattern',
+    'For the best output, use black and white, square aspect ratio.'
+  );
+  if(ok) $('shapeUploadFile').click();
+});
+$('shapeUploadFile').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    const pts = imageToShapePts(img);
+    if(!pts){ alert('Could not trace a shape from that image. Try one with clearer dark/light contrast.'); return; }
+    pushHistory();
+    S.shape = 'image';
+    S.customPts = pts;
+    S.customClosed = true;
+    S.customAngle = 0;
+    $('customAngle').value = 0; $('customAngleV').value = 0;
+    activeSub = -1;
+    syncShapeIcon();
+    drawEditor();
+    draw();
+    syncVertexCountSlider();
+    e.target.value = '';
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); alert('Could not load that image.'); };
+  img.src = url;
+});
+// First boot: populate customPts from the default shape so the canvas
+// renders as the named icon rather than the legacy triangle stub.
+if(SHAPE_PRESETS[S.shape]){
+  const p = SHAPE_PRESETS[S.shape];
+  S.customPts = p.pts.map(q => q === null ? null : q.slice());
+  S.customClosed = p.closed;
+  S.customAngle = 0;
+}
+
+// Rotate the entire custom-shape (every sub-path) around the cell origin by
+// delta degrees and update S.customAngle. Used by the angle slider so the
+// shape spins live as the user drags. Compounds rotations for the running
+// session — preset clicks reset the angle to 0.
+function rotateCustomPtsBy(deltaDeg){
+  if(!deltaDeg) return;
+  const a = deltaDeg * Math.PI / 180;
+  const c = Math.cos(a), s = Math.sin(a);
+  S.customPts = S.customPts.map(p => {
+    if(p === null) return null;
+    const out = [p[0]*c - p[1]*s, p[0]*s + p[1]*c];
+    if(p.length === 3) out.push(p[2]);     // preserve per-vertex corner radius
+    return out;
+  });
+}
+function applyCustomAngle(v){
+  v = clamp(v, 0, 180);
+  // Soft-snap to common rotations when the user drags within 2° of them so
+  // 90° / 45° clicks lock cleanly without giving up fine control elsewhere.
+  const snaps = [0, 45, 90, 135, 180];
+  for(const s of snaps){
+    if(Math.abs(v - s) <= 2){ v = s; break; }
+  }
+  const delta = v - (S.customAngle || 0);
+  rotateCustomPtsBy(delta);
+  S.customAngle = v;
+  $('customAngle').value = v;
+  $('customAngleV').value = v;
+  drawEditor(); draw();
+}
+$('customAngle').addEventListener('input',  e => applyCustomAngle(parseFloat(e.target.value)));
+$('customAngleV').addEventListener('input', e => applyCustomAngle(parseFloat(e.target.value)||0));
+
+let edDrag = -1, edDragCorner = -1;
+// Index in customPts of the first vertex of the in-progress sub-shape started
+// by shift+click. While >=0, plain clicks append to that sub-shape (instead
+// of inserting into the nearest existing edge). Reset to -1 by clicking the
+// first vertex of the active sub-shape, by Clear, or by loading a preset.
+let activeSub = -1;
+
+// ---------- live corners (per-vertex roundness) ----------
+// A customPts entry can be [x,y] (uses global S.corner) or [x,y,r] where r
+// is in cell-half units (0..0.5). The shape editor shows a small handle at
+// the angle bisector inside each vertex; dragging it sets that vertex's r.
+function findSubpath(k){
+  const pts = S.customPts;
+  if(k < 0 || k >= pts.length || pts[k] === null) return null;
+  let s = k; while(s > 0 && pts[s-1] !== null) s--;
+  let e = k; while(e < pts.length-1 && pts[e+1] !== null) e++;
+  return { sub: pts.slice(s, e+1), localIdx: k - s };
+}
+function vertexBisector(k){
+  const info = findSubpath(k);
+  if(!info || info.sub.length < 3) return null;
+  const sub = info.sub, li = info.localIdx;
+  const cur = sub[li];
+  const prev = sub[(li-1+sub.length)%sub.length];
+  const next = sub[(li+1)%sub.length];
+  const p1x = prev[0]-cur[0], p1y = prev[1]-cur[1];
+  const p2x = next[0]-cur[0], p2y = next[1]-cur[1];
+  const l1 = Math.hypot(p1x,p1y) || 1;
+  const l2 = Math.hypot(p2x,p2y) || 1;
+  const ux = p1x/l1 + p2x/l2, uy = p1y/l1 + p2y/l2;
+  const ulen = Math.hypot(ux, uy);
+  if(ulen < 1e-6) return null;
+  return [ux/ulen, uy/ulen];
+}
+function vertexCornerR(k){
+  const p = S.customPts[k];
+  return p && p.length === 3 ? p[2] : 0;
+}
+function setVertexCornerR(k, r){
+  const p = S.customPts[k];
+  if(!p) return;
+  r = clamp(r, 0, 0.5);
+  S.customPts[k] = r > 0.001 ? [p[0], p[1], r] : [p[0], p[1]];
+}
+const CORNER_WIDGET_OFFSET = 0.06;     // local-coord offset when r is 0
+function cornerWidgetLocal(k){
+  const p = S.customPts[k];
+  if(!p) return null;
+  const bis = vertexBisector(k);
+  if(!bis) return null;
+  const r = vertexCornerR(k);
+  const off = r > 0.001 ? r : CORNER_WIDGET_OFFSET;
+  return [p[0] + bis[0]*off, p[1] + bis[1]*off];
+}
+function pickEdCornerWidget(lx, ly){
+  if(!S.customClosed || !S.liveCorner) return -1;
+  const tol = 0.035;
+  let hit = -1, bd = tol;
+  for(let k=0; k<S.customPts.length; k++){
+    const w = cornerWidgetLocal(k);
+    if(!w) continue;
+    const d = Math.hypot(w[0]-lx, w[1]-ly);
+    if(d < bd){ bd = d; hit = k; }
+  }
+  return hit;
+}
+const edToLocal = (x,y) => {
+  const r = sEd.getBoundingClientRect();
+  const px = (x - r.left) / r.width * sEd.width;
+  const py = (y - r.top) / r.height * sEd.height;
+  return [px/sEd.width - 0.5, py/sEd.height - 0.5];
+};
+const edToCanvas = (lx,ly) => [ (lx+0.5)*sEd.width, (ly+0.5)*sEd.height ];
+
+function drawEditor(){
+  const W = sEd.width, H = sEd.height;
+  sCtx.fillStyle = '#1c1f25';
+  sCtx.fillRect(0,0,W,H);
+  // 16x16 grid (skip center axes — drawn next in a brighter colour).
+  sCtx.strokeStyle = '#2a2e36';
+  sCtx.lineWidth = 1;
+  for(let i=1;i<16;i++){
+    if(i === 8) continue;
+    sCtx.beginPath();
+    sCtx.moveTo(i*W/16,0); sCtx.lineTo(i*W/16,H); sCtx.stroke();
+    sCtx.beginPath();
+    sCtx.moveTo(0,i*H/16); sCtx.lineTo(W,i*H/16); sCtx.stroke();
+  }
+  // center cross
+  sCtx.strokeStyle = '#3a4048';
+  sCtx.beginPath(); sCtx.moveTo(W/2,0); sCtx.lineTo(W/2,H); sCtx.stroke();
+  sCtx.beginPath(); sCtx.moveTo(0,H/2); sCtx.lineTo(W,H/2); sCtx.stroke();
+  // cell bounds at 50%
+  sCtx.strokeStyle = '#4a5058';
+  sCtx.setLineDash([4,3]);
+  sCtx.strokeRect(W*0.125, H*0.125, W*0.75, H*0.75);
+  sCtx.setLineDash([]);
+
+  // shape fill (handles null subpath markers)
+  const pts = S.customPts;
+  if(pts.length>=2){
+    sCtx.fillStyle = 'rgba(124,242,193,0.18)';
+    sCtx.strokeStyle = '#7cf2c1';
+    sCtx.lineWidth = 1.5;
+    sCtx.beginPath();
+    let started = false;
+    pts.forEach(p => {
+      if(p === null){
+        if(started && S.customClosed) sCtx.closePath();
+        started = false; return;
+      }
+      const [cx,cy] = edToCanvas(p[0], p[1]);
+      if(!started){ sCtx.moveTo(cx,cy); started = true; }
+      else sCtx.lineTo(cx,cy);
+    });
+    if(started && S.customClosed) sCtx.closePath();
+    if(S.customClosed) sCtx.fill();
+    sCtx.stroke();
+  }
+  // vertices (skip null markers; mark each subpath's first vertex larger)
+  let firstOfSub = true;
+  pts.forEach((p, k) => {
+    if(p === null){ firstOfSub = true; return; }
+    const [cx,cy] = edToCanvas(p[0], p[1]);
+    // Active sub-shape's first vertex gets an orange ring — click it to close.
+    if(k === activeSub){
+      sCtx.beginPath();
+      sCtx.arc(cx, cy, 8, 0, TAU);
+      sCtx.strokeStyle = '#ff7a59';
+      sCtx.lineWidth = 1.5;
+      sCtx.stroke();
+    }
+    sCtx.fillStyle = '#7cf2c1';
+    sCtx.beginPath();
+    sCtx.arc(cx,cy, firstOfSub ? 5 : 3.5, 0, TAU);
+    sCtx.fill();
+    firstOfSub = false;
+  });
+  // live-corner widgets — small dot inside each vertex along its bisector.
+  // Filled when the vertex has its own per-vertex r, hollow when on the global.
+  // Only shown when the Live Corners toggle is enabled.
+  if(S.customClosed && S.liveCorner){
+    for(let k=0; k<pts.length; k++){
+      const w = cornerWidgetLocal(k);
+      if(!w) continue;
+      const [cx, cy] = edToCanvas(w[0], w[1]);
+      const active = vertexCornerR(k) > 0.001;
+      sCtx.beginPath();
+      sCtx.arc(cx, cy, 4, 0, TAU);
+      sCtx.fillStyle = active ? '#ff7a59' : '#1c1f25';
+      sCtx.fill();
+      sCtx.strokeStyle = '#ff7a59';
+      sCtx.lineWidth = 1.2;
+      sCtx.stroke();
+    }
+  }
+  $('vCount').textContent = pts.filter(p => p !== null).length;
+}
+
+function pickEdVertex(lx,ly){
+  const tol = 0.04;
+  let hit=-1, bd=tol;
+  S.customPts.forEach((p,k)=>{
+    if(p === null) return;
+    const d = Math.hypot(p[0]-lx, p[1]-ly);
+    if(d<bd){ bd=d; hit=k; }
+  });
+  return hit;
+}
+
+// Returns the index in customPts at which to splice in a new vertex.
+// Walks each sub-path independently so we don't insert across a null break.
+function nearestEdgeInsert(lx, ly){
+  const pts = S.customPts;
+  if(pts.length<2) return pts.length;
+  let bestInsertAt = pts.length, bd = Infinity;
+  let subStart = -1;
+  for(let i=0;i<=pts.length;i++){
+    const ended = (i===pts.length || pts[i]===null);
+    if(ended){
+      // close the sub-path that just ended
+      if(subStart>=0){
+        const subEnd = i-1;             // last real vertex index
+        const len = subEnd - subStart + 1;
+        if(len >= 2){
+          const segs = S.customClosed ? len : len-1;
+          for(let s=0;s<segs;s++){
+            const aIdx = subStart + s;
+            const bIdx = subStart + ((s+1) % len);
+            const a = pts[aIdx], b = pts[bIdx];
+            const [d] = distToSeg(lx,ly, a[0],a[1], b[0],b[1]);
+            if(d<bd){ bd=d; bestInsertAt = aIdx + 1; }
+          }
+        }
+      }
+      subStart = -1;
+    } else if(subStart<0){
+      subStart = i;
+    }
+  }
+  return bestInsertAt;
+}
+
+sEd.addEventListener('mousedown', e=>{
+  const [lx,ly] = edToLocal(e.clientX, e.clientY);
+  // Live-corner widget takes priority over vertices so the smaller handle is
+  // always reachable. Right-click on a widget clears that vertex's per-vertex r.
+  const cornerHit = pickEdCornerWidget(lx, ly);
+  if(cornerHit >= 0){
+    if(e.button === 2){ pushHistory(); setVertexCornerR(cornerHit, 0); drawEditor(); draw(); return; }
+    pushHistory();
+    edDragCorner = cornerHit;
+    return;
+  }
+  const hit = pickEdVertex(lx,ly);
+  if(e.button===2){ // right-click remove
+    if(hit>=0){
+      pushHistory(); S.customPts.splice(hit,1);
+      // Removing inside or before the active sub-shape can break it — bail out.
+      if(activeSub >= 0 && (hit <= activeSub || S.customPts[activeSub] === undefined || S.customPts[activeSub] === null)) activeSub = -1;
+      drawEditor(); draw();
+    }
+    return;
+  }
+  // Click the first vertex of the active sub-shape to finish it.
+  if(hit >= 0 && hit === activeSub){
+    activeSub = -1;
+    drawEditor(); draw();
+    return;
+  }
+  if(hit >= 0){ edDrag = hit; return; }
+  pushHistory();
+  const pt = [clamp(lx,-0.5,0.5), clamp(ly,-0.5,0.5)];
+  if(e.shiftKey && S.customPts.length > 0 && S.customPts[S.customPts.length-1] !== null){
+    // Shift+click starts a brand-new sub-shape. Subsequent plain clicks append
+    // to it (see branch below) until the user clicks its first vertex to close.
+    S.customPts.push(null, pt);
+    activeSub = S.customPts.length - 1;
+    edDrag = activeSub;
+  } else if(activeSub >= 0){
+    // Plain click while a sub-shape is in progress: append to its end.
+    S.customPts.push(pt);
+    edDrag = S.customPts.length - 1;
+  } else {
+    const at = nearestEdgeInsert(lx, ly);
+    S.customPts.splice(at, 0, pt);
+    edDrag = at;
+  }
+  drawEditor(); draw();
+});
+sEd.addEventListener('dblclick', e=>{
+  const [lx,ly] = edToLocal(e.clientX, e.clientY);
+  // Double-click on a corner widget resets that vertex's per-vertex r.
+  const cornerHit = pickEdCornerWidget(lx, ly);
+  if(cornerHit >= 0){ pushHistory(); setVertexCornerR(cornerHit, 0); drawEditor(); draw(); return; }
+  const hit = pickEdVertex(lx,ly);
+  if(hit>=0){ S.customPts.splice(hit,1); drawEditor(); draw(); }
+});
+sEd.addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('mousemove', e=>{
+  if(edDragCorner >= 0){
+    const [lx,ly] = edToLocal(e.clientX, e.clientY);
+    const p = S.customPts[edDragCorner];
+    const bis = vertexBisector(edDragCorner);
+    if(p && bis){
+      // Project drag onto the bisector so r tracks distance along the inward
+      // direction (matches Illustrator's Live Corners feel).
+      const dx = lx - p[0], dy = ly - p[1];
+      const r = clamp(dx*bis[0] + dy*bis[1], 0, 0.5);
+      setVertexCornerR(edDragCorner, r);
+      drawEditor(); draw();
+    }
+    return;
+  }
+  if(edDrag<0) return;
+  const [lx,ly] = edToLocal(e.clientX, e.clientY);
+  let nx = clamp(lx, -0.5, 0.5), ny = clamp(ly, -0.5, 0.5);
+  // Hold Ctrl while dragging to snap the dragged vertex to the editor's
+  // 1/8 grid lines (matches the visible guidelines).
+  if(e.ctrlKey || e.metaKey){
+    const step = 1/16;
+    nx = Math.round(nx/step)*step;
+    ny = Math.round(ny/step)*step;
+  }
+  // Preserve any per-vertex corner radius across the drag.
+  const old = S.customPts[edDrag];
+  S.customPts[edDrag] = old && old.length === 3 ? [nx, ny, old[2]] : [nx, ny];
+  drawEditor(); draw();
+});
+addEventListener('mouseup', ()=>{ edDrag = -1; edDragCorner = -1; });
+
+$('liveCorner').addEventListener('change', e => {
+  S.liveCorner = e.target.checked;
+  drawEditor(); draw();
+});
+$('shapeClear').addEventListener('click', ()=>{
+  S.customPts = []; activeSub = -1; drawEditor(); draw();
+});
+$('shapeClose').addEventListener('click', ()=>{
+  S.customClosed = !S.customClosed; drawEditor(); draw();
+});
+
+// Resample a closed polygon to `n` vertices evenly spaced along its perimeter.
+function resamplePolygon(pts, n){
+  if(pts.length < 3 || n < 3) return pts.map(p => [p[0], p[1]]);
+  const lens = [];
+  let total = 0;
+  for(let i=0; i<pts.length; i++){
+    const a = pts[i], b = pts[(i+1) % pts.length];
+    const L = Math.hypot(b[0]-a[0], b[1]-a[1]);
+    lens.push(L); total += L;
+  }
+  if(total <= 0) return pts.map(p => [p[0], p[1]]);
+  const step = total / n;
+  const out = [];
+  let segIdx = 0, segAcc = 0;
+  for(let k=0; k<n; k++){
+    const target = k * step;
+    while(segIdx < lens.length-1 && segAcc + lens[segIdx] < target){
+      segAcc += lens[segIdx]; segIdx++;
+    }
+    const t = (target - segAcc) / (lens[segIdx] || 1);
+    const a = pts[segIdx], b = pts[(segIdx+1) % pts.length];
+    out.push([a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t]);
+  }
+  return out;
+}
+// Polygon centroid (area-weighted) for a single closed sub-path. Falls back
+// to vertex average for degenerate / collinear inputs. Used to re-center
+// the shape on its centre of mass after resampling.
+function polygonCentroid(pts){
+  let A = 0, cx = 0, cy = 0;
+  for(let i=0; i<pts.length; i++){
+    const [x0,y0] = pts[i];
+    const [x1,y1] = pts[(i+1) % pts.length];
+    const cross = x0*y1 - x1*y0;
+    A  += cross;
+    cx += (x0+x1) * cross;
+    cy += (y0+y1) * cross;
+  }
+  A *= 0.5;
+  if(Math.abs(A) > 1e-9) return [cx/(6*A), cy/(6*A)];
+  // Fallback: vertex average.
+  let sx=0, sy=0; for(const [x,y] of pts){ sx+=x; sy+=y; }
+  return pts.length ? [sx/pts.length, sy/pts.length] : [0,0];
+}
+// Resample S.customPts to `target` total vertices, splitting allocation
+// across sub-paths proportional to their perimeter (≥3 each). New vertices
+// land on the existing perimeter, so the silhouette is preserved on
+// increases. After resampling the whole shape is re-centred on its
+// centre of mass (area-weighted centroid of the largest sub-path).
+function applyVertexCount(target){
+  const subs = splitNullSubpaths(S.customPts);
+  if(!subs.length) return;
+  const lens = subs.map(sub => {
+    let L = 0;
+    for(let i=0; i<sub.length; i++){
+      const a = sub[i], b = sub[(i+1) % sub.length];
+      L += Math.hypot(b[0]-a[0], b[1]-a[1]);
+    }
+    return L;
+  });
+  const totalL = lens.reduce((a,b) => a+b, 0) || 1;
+  const resampledSubs = subs.map((sub, k) => {
+    const nSub = Math.max(3, Math.round(target * lens[k] / totalL));
+    return resamplePolygon(sub, nSub);
+  });
+  // Centre on the largest sub-path's centroid so multi-subpath shapes
+  // preserve their relative arrangement around that anchor.
+  let mainIdx = 0;
+  for(let i=1; i<resampledSubs.length; i++){
+    if(lens[i] > lens[mainIdx]) mainIdx = i;
+  }
+  const [ccx, ccy] = polygonCentroid(resampledSubs[mainIdx]);
+  const out = [];
+  resampledSubs.forEach((sub, k) => {
+    if(k > 0) out.push(null);
+    for(const [x, y] of sub) out.push([x - ccx, y - ccy]);
+  });
+  pushHistory();
+  S.customPts = out;
+  drawEditor(); draw();
+  syncVertexCountSlider();
+}
+function syncVertexCountSlider(){
+  const n = S.customPts.filter(p => p !== null).length;
+  $('vertResample').value = clamp(n, 3, 128);
+  $('vertResampleV').value = n;
+}
+$('vertResample').addEventListener('input', e => {
+  applyVertexCount(parseInt(e.target.value, 10) || 3);
+});
+$('vertResampleV').addEventListener('input', e => {
+  applyVertexCount(parseInt(e.target.value, 10) || 3);
+});
+function syncRadialBoxVisibility(){
+  $('radialBox').style.display = (S.tileType === 'radial') ? '' : 'none';
+}
+$('tileType').addEventListener('change', e => {
+  S.tileType = e.target.value;
+  syncRadialBoxVisibility();
+  draw();
+});
+syncRadialBoxVisibility();
+
+// ---------- reference image ----------
+$('imgFile').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  $('imgFileLabel').textContent = file.name;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    S.image.el = img;
+    S.image.naturalW = img.naturalWidth;
+    S.image.naturalH = img.naturalHeight;
+    // Initial fit: ~60% of the smaller view dim so the image is clearly
+    // visible without spilling off-screen. The Scale slider tracks this
+    // factor so the user can resize from there.
+    const fit = Math.min(S.w, S.h) * 0.6 / S.zoom;
+    const k = clamp(Math.min(fit / img.naturalWidth, fit / img.naturalHeight, 1), 0.05, 5);
+    S.image.scale = k;
+    S.image.w = img.naturalWidth * k;
+    S.image.h = img.naturalHeight * k;
+    const [vx, vy] = screenToWorld(S.w/2, S.h/2);
+    S.image.x = vx - S.image.w/2;
+    S.image.y = vy - S.image.h/2;
+    S.image.visible = true;
+    $('imgVisible').checked = true;
+    $('imgScale').value = k;
+    $('imgScaleV').value = k.toFixed(2);
+    $('imgControls').style.display = '';
+    draw();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); alert('Could not load that image.'); };
+  img.src = url;
+});
+
+function setImageScale(s){
+  if(!S.image.el) return;
+  s = clamp(s, 0.05, 5);
+  // Resize about the current image center so the image stays put visually.
+  const cx = S.image.x + S.image.w/2;
+  const cy = S.image.y + S.image.h/2;
+  S.image.scale = s;
+  S.image.w = S.image.naturalW * s;
+  S.image.h = S.image.naturalH * s;
+  S.image.x = cx - S.image.w/2;
+  S.image.y = cy - S.image.h/2;
+  $('imgScale').value = s;
+  $('imgScaleV').value = s.toFixed(2);
+  draw();
+}
+$('imgScale').addEventListener('input',  e => setImageScale(parseFloat(e.target.value)));
+$('imgScaleV').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  if(isFinite(v)) setImageScale(v);
+});
+$('imgScaleV').addEventListener('change', () => {
+  $('imgScaleV').value = (S.image.scale || 1).toFixed(2);
+});
+$('imgOpacity').addEventListener('input', e => {
+  S.image.opacity = clamp(parseFloat(e.target.value), 0, 1);
+  $('imgOpacityV').value = S.image.opacity.toFixed(2);
+  draw();
+});
+$('imgOpacityV').addEventListener('input', e => {
+  const typed = parseFloat(e.target.value);
+  if(!isFinite(typed)) return;
+  const v = clamp(typed, 0, 1);
+  S.image.opacity = v;
+  $('imgOpacity').value = v;
+  if(typed !== v) e.target.value = v.toFixed(2);
+  draw();
+});
+$('imgOpacityV').addEventListener('change', () => {
+  $('imgOpacityV').value = S.image.opacity.toFixed(2);
+});
+$('imgVisible').addEventListener('change', e => { S.image.visible = e.target.checked; draw(); });
+$('imgLocked').addEventListener('change',  e => { S.image.locked  = e.target.checked; updateHoverCursor(); });
+$('imgRemove').addEventListener('click', () => {
+  S.image.el = null; S.image.x = S.image.y = S.image.w = S.image.h = 0;
+  $('imgFile').value = '';
+  $('imgFileLabel').textContent = 'Upload file';
+  $('imgControls').style.display = 'none';
+  draw();
+});
+
+// True if (wx, wy) sits inside the reference image's world-space rectangle.
+function imageHit(wx, wy){
+  const im = S.image;
+  if(!im.el || !im.visible || im.locked) return false;
+  return wx >= im.x && wy >= im.y && wx <= im.x + im.w && wy <= im.y + im.h;
+}
+$('bg').addEventListener('input', e => { S.bg = e.target.value; draw(); });
+$('fg').addEventListener('input', e => { S.fg = e.target.value; draw(); });
+$('fill').addEventListener('change', e => { S.fill = e.target.checked; draw(); });
+$('mute').addEventListener('change', e => { S.muteAttractors = e.target.checked; draw(); });
+$('lockAdd').addEventListener('change', e => { S.lockAdd = e.target.checked; });
+$('hideA').addEventListener('change', e => { S.hideAttractors = e.target.checked; draw(); });
+
+$('swap').addEventListener('click', () => {
+  const t = S.bg; S.bg = S.fg; S.fg = t;
+  $('bg').value = S.bg; $('fg').value = S.fg;
+  draw();
+});
+
+$('resetView').addEventListener('click', () => {
+  S.zoom = 1; S.panX = S.w/2; S.panY = S.h/2; draw();
+});
+
+document.querySelectorAll('#amode button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#amode button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    S.aMode = b.dataset.m;
+    if(S.selected>=0 && S.attractors[S.selected]){
+      S.attractors[S.selected].mode = S.aMode;
+      renderAList();
+    }
+    draw();
+  });
+});
+document.querySelectorAll('#atool button').forEach(b => {
+  b.addEventListener('click', () => pickTool(b.dataset.t));
+});
+
+// Align all multi-selected attractor centres to their group centroid (the
+// average of their origin points). Each attractor moves as a whole — geometry
+// and shape are preserved.
+$('alignCenters').addEventListener('click', () => {
+  if(multiSel.size < 2) return;
+  const ids = [...multiSel].filter(i => S.attractors[i]);
+  if(ids.length < 2) return;
+  pushHistory();
+  let cx = 0, cy = 0;
+  for(const i of ids){
+    const c = attractorCenter(S.attractors[i]);
+    cx += c[0]; cy += c[1];
+  }
+  cx /= ids.length; cy /= ids.length;
+  for(const i of ids){
+    const a = S.attractors[i];
+    const c = attractorCenter(a);
+    offsetAttractor(a, cx - c[0], cy - c[1]);
+  }
+  draw();
+});
+$('clearA').addEventListener('click', () => {
+  if(!S.attractors.length) return;
+  pushHistory();
+  S.attractors = []; S.selected = -1; multiSel.clear(); cancelDraft(); updateSelPill(); renderAList(); draw();
+});
+$('closePath').addEventListener('click', () => commitDraft(true));
+$('resetMag').addEventListener('click', () => {
+  if(S.selected<0) return;
+  const a = S.attractors[S.selected];
+  if(!a) return;
+  pushHistory();
+  a.mag = attractorCentroid(a);
+  a.magLocked = true;                    // re-lock so the anchor tracks geometry again
+  $('aMagLock').checked = true;
+  draw();
+});
+$('aInverted').addEventListener('change', e => {
+  if(S.selected<0) return;
+  const a = S.attractors[S.selected];
+  if(!a || a.type !== 'gradient') return;
+  pushHistory();
+  a.inverted = e.target.checked;
+  draw();
+});
+$('aSolid').addEventListener('change', e => {
+  if(S.selected<0) return;
+  const a = S.attractors[S.selected];
+  if(!a || (a.type !== 'ellipse' && a.type !== 'box')) return;
+  pushHistory();
+  a.solid = e.target.checked;
+  draw();
+});
+function bindACornerR(srcId){
+  $(srcId).addEventListener('input', e => {
+    if(S.selected<0) return;
+    const a = S.attractors[S.selected];
+    if(!a || a.type !== 'box') return;
+    const v = clamp(parseFloat(e.target.value)||0, 0, 5000);
+    a.cornerR = v;
+    $('aCornerR').value = v;
+    $('aCornerRV').value = Math.round(v);
+    invalidateFlat(a);
+    draw();
+  });
+}
+bindACornerR('aCornerR');
+bindACornerR('aCornerRV');
+function bindABoxSize(srcId){
+  $(srcId).addEventListener('input', e => {
+    if(S.selected<0) return;
+    const a = S.attractors[S.selected];
+    if(!a || a.type !== 'box') return;
+    const v = clamp(parseFloat(e.target.value)||0, 5, 5000);
+    // Preserve aspect ratio when resizing via the Size slider.
+    const cur = (a.w + a.h) / 2 || 1;
+    const k = v / cur;
+    a.w = Math.max(2, a.w * k);
+    a.h = Math.max(2, a.h * k);
+    $('aBoxSize').value = v;
+    $('aBoxSizeV').value = Math.round(v);
+    invalidateFlat(a);
+    draw();
+  });
+}
+bindABoxSize('aBoxSize');
+bindABoxSize('aBoxSizeV');
+// Re-sync the Size slider after a free-transform / corner-handle drag.
+function syncBoxSize(){
+  if(S.selected < 0) return;
+  const a = S.attractors[S.selected];
+  if(!a || a.type !== 'box') return;
+  const sz = (a.w + a.h) / 2;
+  $('aBoxSize').value = sz;
+  $('aBoxSizeV').value = Math.round(sz);
+}
+$('aMagLock').addEventListener('change', e => {
+  if(S.selected<0) return;
+  const a = S.attractors[S.selected];
+  if(!a) return;
+  pushHistory();
+  a.magLocked = e.target.checked;
+  // When unlocking, freeze the anchor at its current centroid so dragging
+  // starts from where it visually was rather than jumping somewhere stale.
+  if(!a.magLocked) a.mag = attractorCentroid(a);
+  draw();
+});
+
+function updateSelPill(){
+  const p = $('selPill');
+  if(S.selected<0){ p.textContent='none selected'; p.classList.remove('on'); }
+  else {
+    const a = S.attractors[S.selected];
+    p.textContent = a.name || `#${S.selected+1} ${a.type}`;
+    p.classList.add('on');
+  }
+}
+function defaultName(a, i){ return `#${i+1} ${a.type}`; }
+
+function renderAList(){
+  const list = $('aList'); list.innerHTML = '';
+  if(!S.attractors.length){
+    list.innerHTML = '<div class="empty">No attractors — click the canvas to add one.</div>';
+    return;
+  }
+  S.attractors.forEach((a,i)=>{
+    const el = document.createElement('div');
+    el.className = 'aItem' + (i===S.selected ? ' on' : '');
+
+    // Display as a span; double-click swaps it for an input to rename.
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = a.name || defaultName(a, i);
+    name.title = 'Double-click to rename';
+    name.addEventListener('dblclick', ev => {
+      ev.stopPropagation();
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'name';
+      inp.value = a.name || defaultName(a, i);
+      const commit = () => {
+        const v = inp.value.trim();
+        const next = v || defaultName(a, i);
+        const cur  = a.name || defaultName(a, i);
+        if(next !== cur){ pushHistory(); a.name = next; }
+        name.textContent = next;
+        if(inp.parentNode) inp.parentNode.replaceChild(name, inp);
+      };
+      inp.addEventListener('keydown', kv => {
+        if(kv.key === 'Enter'){ inp.blur(); }
+        else if(kv.key === 'Escape'){
+          inp.value = a.name || defaultName(a, i);
+          if(inp.parentNode) inp.parentNode.replaceChild(name, inp);
+        }
+      });
+      inp.addEventListener('blur', commit);
+      inp.addEventListener('mousedown', e => e.stopPropagation());
+      inp.addEventListener('click', e => e.stopPropagation());
+      el.replaceChild(inp, name);
+      inp.focus();
+      inp.select();
+    });
+
+    const mkBtn = (cls, title, text, onClick) => {
+      const b = document.createElement('button');
+      b.className = 'btn ' + cls; b.title = title; b.textContent = text;
+      b.addEventListener('click', ev => { ev.stopPropagation(); pushHistory(); onClick(); });
+      return b;
+    };
+    const mute = mkBtn('mute' + (a.muted ? ' off' : ''),
+                       a.muted ? 'Unmute this attractor' : 'Mute this attractor',
+                       a.muted ? '◌' : '●',
+                       () => { a.muted = !a.muted; renderAList(); draw(); });
+    const dup = mkBtn('dup', 'Duplicate', '⧉', () => duplicateAttractor(i));
+    const x   = mkBtn('x',   'Delete',    '×', () => {
+      S.attractors.splice(i,1);
+      pruneMultiAfterDelete(i);
+      if(S.selected===i) selectAttractor(-1);
+      else if(S.selected>i) S.selected--;
+      renderAList(); draw();
+    });
+
+    if(a.muted) el.classList.add('muted');
+    if(multiSel.has(i)) el.classList.add('multi');
+    el.appendChild(name); el.appendChild(mute); el.appendChild(dup); el.appendChild(x);
+    // Single click anywhere in the row (including the name) selects the
+    // attractor; double-click on the name enters rename mode. Shift+click
+    // toggles multi-selection (the row's primary still becomes this i so
+    // the Values panel reflects the latest click).
+    el.addEventListener('click', ev => {
+      if(ev.target === mute || ev.target === dup || ev.target === x) return;
+      if(ev.shiftKey){
+        const saved = new Set(multiSel);
+        selectAttractor(i);
+        // selectAttractor reset multi to {i}; restore prior set + toggle i.
+        multiSel = saved;
+        if(multiSel.has(i)) multiSel.delete(i);
+        else multiSel.add(i);
+        updateAListSelection();
+        updateAlignButton();
+        draw();
+      } else {
+        selectAttractor(i); draw();
+      }
+    });
+    list.appendChild(el);
+  });
+  updateAlignButton();
+}
+
+// Toggle the .on / .multi classes on existing list items without rebuilding
+// the DOM. Lets selectAttractor change selection while a name input keeps focus.
+function updateAListSelection(){
+  document.querySelectorAll('#aList .aItem').forEach((el, i) => {
+    el.classList.toggle('on', i === S.selected);
+    el.classList.toggle('multi', multiSel.has(i));
+  });
+  updateAlignButton();
+}
+function updateAlignButton(){
+  const btn = $('alignCenters');
+  if(btn) btn.disabled = multiSel.size < 2;
+}
+
+// Centre of an attractor in world coords — used by Ctrl-snap to align a
+// dragged attractor to the centre of any other one.
+function attractorCenter(a){
+  if(a.type==='pen' || a.type==='gradient') return attractorCentroid(a);
+  return [a.x, a.y];
+}
+// Snap a world point to the nearest attractor centre (excluding `excludeI`)
+// when the screen-space distance is within `tolPx` pixels. Used during drag
+// when the user holds Ctrl, mirroring the in-editor vertex-snap convention.
+function snapToNearestCenter(wx, wy, excludeI, tolPx){
+  const tol = (tolPx || 18) / S.zoom;
+  let best = null, bd = tol;
+  for(let i=0; i<S.attractors.length; i++){
+    if(i === excludeI) continue;
+    const c = attractorCenter(S.attractors[i]);
+    const d = Math.hypot(c[0]-wx, c[1]-wy);
+    if(d < bd){ bd = d; best = c; }
+  }
+  return best || [wx, wy];
+}
+
+function offsetAttractor(a, dx, dy){
+  if(a.type==='pen'){
+    for(const nd of a.nodes){ nd.p[0]+=dx; nd.p[1]+=dy; }
+    invalidateFlat(a);
+  } else if(a.type==='gradient'){
+    a.a[0]+=dx; a.a[1]+=dy; a.b[0]+=dx; a.b[1]+=dy;
+  } else {
+    a.x += dx; a.y += dy;
+    if(a.type==='ellipse' || a.type==='box') invalidateFlat(a);
+  }
+  if(a.mag){ a.mag[0]+=dx; a.mag[1]+=dy; }
+}
+
+function duplicateAttractor(i, dxWorld, dyWorld){
+  const src = S.attractors[i];
+  const clone = JSON.parse(JSON.stringify(src));
+  delete clone._flat;
+  // default offset = 20 screen px (converted to world)
+  const dx = dxWorld !== undefined ? dxWorld : 20/S.zoom;
+  const dy = dyWorld !== undefined ? dyWorld : 20/S.zoom;
+  offsetAttractor(clone, dx, dy);
+  const base = (clone.name || defaultName(src, i)).replace(/ copy( \d+)?$/, '');
+  // Avoid name collision
+  let n = 1, candidate;
+  do { candidate = n===1 ? `${base} copy` : `${base} copy ${n}`; n++; }
+  while(S.attractors.some(a => a.name === candidate));
+  clone.name = candidate;
+  S.attractors.push(clone);
+  selectAttractor(S.attractors.length-1);
+  renderAList();
+  draw();
+  return S.attractors.length-1;
+}
+// Multi-selection (shift+click in the list). Always contains S.selected
+// when one is set; cleared when no primary. Used by the Align button.
+let multiSel = new Set();
+// Re-index multiSel after attractor `i` is spliced out so any remaining
+// members continue to point at the right entries.
+function pruneMultiAfterDelete(i){
+  const next = new Set();
+  for(const k of multiSel){
+    if(k === i) continue;
+    next.add(k > i ? k - 1 : k);
+  }
+  multiSel = next;
+}
+function selectAttractor(i){
+  S.selected = i;
+  multiSel = new Set(i >= 0 ? [i] : []);
+  if(i>=0){
+    const a = S.attractors[i];
+    S.aFalloff  = a.r;
+    S.aPull     = a.pull || 0;
+    S.aStrength = a.strength;
+    S.aCurve    = a.curve;
+    S.aMode     = a.mode;
+    $('aFalloff').value  = a.r;        $('aFalloffV').value  = Math.round(a.r);
+    $('aPull').value     = S.aPull;    $('aPullV').value     = S.aPull.toFixed(2);
+    $('aStrength').value = a.strength; $('aStrengthV').value = a.strength.toFixed(2);
+    $('aCurve').value    = a.curve;    $('aCurveV').value    = a.curve.toFixed(2);
+    document.querySelectorAll('#amode button').forEach(b =>
+      b.classList.toggle('on', b.dataset.m === a.mode));
+    // Magnet centroid lock state — default true if missing (legacy attractors).
+    $('aMagLock').checked = a.magLocked !== false;
+    // Ellipse-only Size control: show + sync to current rx/ry average.
+    const ellipseRow = $('ellipseSizeRow');
+    if(a.type === 'ellipse'){
+      const sz = (a.rx + a.ry) / 2;
+      S.aEllipseSize = sz;
+      $('aEllipseSize').value = sz;
+      $('aEllipseSizeV').value = Math.round(sz);
+      ellipseRow.style.display = '';
+    } else {
+      ellipseRow.style.display = 'none';
+    }
+    // Gradient-only: inverted-direction toggle (default true = full at A → 0 at B).
+    const invRow = $('aInvertedRow');
+    if(a.type === 'gradient'){
+      $('aInverted').checked = a.inverted !== false;
+      invRow.style.display = '';
+    } else {
+      invRow.style.display = 'none';
+    }
+    // Ellipse / box: solid (whole shape attracts) vs edge-only.
+    const solidRow = $('aSolidRow');
+    if(a.type === 'ellipse' || a.type === 'box'){
+      $('aSolid').checked = a.solid !== false;
+      solidRow.style.display = '';
+    } else {
+      solidRow.style.display = 'none';
+    }
+    // Box-only: per-attractor corner radius + uniform Size slider. Only
+    // "shape" attractors get editable corners — circle/ellipse already
+    // round, gradient has no shape.
+    const boxRow = $('boxCornerRow');
+    const boxSizeRow = $('boxSizeRow');
+    if(a.type === 'box'){
+      const cr = a.cornerR || 0;
+      $('aCornerR').value = cr;
+      $('aCornerRV').value = Math.round(cr);
+      boxRow.style.display = '';
+      const sz = (a.w + a.h) / 2;
+      $('aBoxSize').value = sz;
+      $('aBoxSizeV').value = Math.round(sz);
+      boxSizeRow.style.display = '';
+    } else {
+      boxRow.style.display = 'none';
+      boxSizeRow.style.display = 'none';
+    }
+  } else {
+    $('ellipseSizeRow').style.display = 'none';
+    $('aInvertedRow').style.display = 'none';
+    $('boxCornerRow').style.display = 'none';
+    $('boxSizeRow').style.display = 'none';
+    $('aSolidRow').style.display = 'none';
+  }
+  updateSelPill();
+  // Light-touch update — preserve any active rename input by leaving the
+  // existing DOM in place and only flipping the .on class.
+  updateAListSelection();
+}
+
+// Re-sync the Size slider when the user reshapes the selected ellipse via
+// a handle drag, free-transform scale, etc.
+function syncEllipseSize(){
+  if(S.selected < 0) return;
+  const a = S.attractors[S.selected];
+  if(!a || a.type !== 'ellipse') return;
+  const sz = (a.rx + a.ry) / 2;
+  S.aEllipseSize = sz;
+  $('aEllipseSize').value = sz;
+  $('aEllipseSizeV').value = Math.round(sz);
+}
+
+// Shared attractor defaults used by every create site.
+function aBase(){
+  return { r:S.aFalloff, pull:S.aPull||0, mode:S.aMode,
+           strength:S.aStrength, curve:S.aCurve, magLocked:true };
+}
+function addAttractor(att){
+  S.attractors.push(att);
+  const i = S.attractors.length-1;
+  renderAList();
+  selectAttractor(i);
+  return i;
+}
+
+// ---------- pen draft ----------
+function startDraft(){ S.draft = { nodes:[], dragNode:-1 }; }
+function cancelDraft(){ S.draft = null; draw(); }
+function commitDraft(closed){
+  if(!S.draft || S.draft.nodes.length<2){ S.draft = null; draw(); return; }
+  pushHistory();
+  const newPen = { ...aBase(), type:'pen', nodes:S.draft.nodes, closed:!!closed };
+  newPen.mag = attractorCentroid(newPen);
+  S.draft = null;
+  addAttractor(newPen);
+  draw();
+}
+
+// ---------- pick / drag ----------
+let drag = null;
+let panning = false;
+let panStart = null;
+
+// vertex encoding:
+//   -1       = body / edge hit
+//   pen:     k*10 + (0: point, 1: hIn handle, 2: hOut handle)
+//   ellipse: 0 = center, 1 = +rx endpoint, 2 = +ry endpoint
+//   gradient: 0 = A, 1 = B
+function pickAttractor(wx, wy, tolPx){
+  const tol = tolPx / S.zoom;
+  // Mag handle on the selected attractor wins over everything else (it's
+  // drawn on top and is the smallest target — easy to lose otherwise).
+  if(S.selected>=0 && S.attractors[S.selected] && S.attractors[S.selected].magLocked === false){
+    const selA = S.attractors[S.selected];
+    const m = magPoint(selA);
+    const dM = Math.hypot(m[0]-wx, m[1]-wy);
+    if(dM < tol) return {i:S.selected, vertex:'mag'};
+  }
+  let hitI=-1, hitV=-1, bd=tol;
+  for(let i=0;i<S.attractors.length;i++){
+    const a = S.attractors[i];
+    if(a.type==='pen'){
+      for(let k=0;k<a.nodes.length;k++){
+        const nd = a.nodes[k];
+        const p  = nd.p;
+        const dP = Math.hypot(p[0]-wx, p[1]-wy);
+        if(dP<bd){ bd=dP; hitI=i; hitV=k*10+0; }
+        if(i===S.selected){ // only manipulate handles on selected path
+          const hIx = p[0]+nd.hIn[0],  hIy = p[1]+nd.hIn[1];
+          const hOx = p[0]+nd.hOut[0], hOy = p[1]+nd.hOut[1];
+          if(nd.hIn[0]||nd.hIn[1]){
+            const d = Math.hypot(hIx-wx, hIy-wy);
+            if(d<bd){ bd=d; hitI=i; hitV=k*10+1; }
+          }
+          if(nd.hOut[0]||nd.hOut[1]){
+            const d = Math.hypot(hOx-wx, hOy-wy);
+            if(d<bd){ bd=d; hitI=i; hitV=k*10+2; }
+          }
+        }
+      }
+    } else if(a.type==='ellipse'){
+      const dC = Math.hypot(a.x-wx, a.y-wy);
+      if(dC<bd){ bd=dC; hitI=i; hitV=0; }
+      if(i===S.selected){
+        const c=Math.cos(a.rot), s=Math.sin(a.rot);
+        const ax=a.x+c*a.rx, ay=a.y+s*a.rx;
+        const bx=a.x-s*a.ry, by=a.y+c*a.ry;
+        const dA=Math.hypot(ax-wx,ay-wy), dB=Math.hypot(bx-wx,by-wy);
+        if(dA<bd){ bd=dA; hitI=i; hitV=1; }
+        if(dB<bd){ bd=dB; hitI=i; hitV=2; }
+      }
+    } else if(a.type==='box'){
+      const dC = Math.hypot(a.x-wx, a.y-wy);
+      if(dC<bd){ bd=dC; hitI=i; hitV=0; }
+    } else if(a.type==='gradient'){
+      const dA = Math.hypot(a.a[0]-wx, a.a[1]-wy);
+      const dB = Math.hypot(a.b[0]-wx, a.b[1]-wy);
+      if(dA<bd){ bd=dA; hitI=i; hitV=0; }
+      if(dB<bd){ bd=dB; hitI=i; hitV=1; }
+    } else {
+      const d = Math.hypot(a.x-wx, a.y-wy);
+      if(d<bd){ bd=d; hitI=i; hitV=-1; }
+    }
+  }
+  if(hitI>=0) return {i:hitI, vertex:hitV};
+  bd = tol;
+  for(let i=0;i<S.attractors.length;i++){
+    const a = S.attractors[i];
+    if(a.type==='pen' && a.nodes.length>=2){
+      const flat = a._flat || (a._flat = flattenBezier(a.nodes, a.closed));
+      const d = nearestOnPoly(wx,wy, flat, a.closed)[0];
+      if(d<bd){ bd=d; hitI=i; }
+    } else if(a.type==='gradient'){
+      const [,,,d] = gradientProject(a, wx, wy);
+      if(d<bd){ bd=d; hitI=i; }
+    } else if(a.type==='ellipse'){
+      const flat = a._flat || (a._flat = flattenEllipse(a));
+      const d = nearestOnPoly(wx, wy, flat, true)[0];
+      if(d<bd){ bd=d; hitI=i; }
+    } else if(a.type==='box'){
+      const flat = a._flat || (a._flat = flattenBox(a));
+      const d = isInsideBox(wx, wy, a) ? 0 : nearestOnPoly(wx, wy, flat, true)[0];
+      if(d<bd){ bd=d; hitI=i; }
+    }
+  }
+  return hitI>=0 ? {i:hitI, vertex:-1} : null;
+}
+
+// Nearest existing pen path (used for cursor-feedback + insert-on-path).
+// Returns {i, seg, t, point:[x,y], worldDist} or null.
+function nearestPenHit(wx, wy, tolPx){
+  const tol = tolPx / S.zoom;
+  let best = null;
+  for(let i=0;i<S.attractors.length;i++){
+    const a = S.attractors[i];
+    if(a.type!=='pen' || !a.nodes || a.nodes.length<2) continue;
+    const n = a.nodes.length;
+    const segs = a.closed ? n : n-1;
+    const SUBS = 30;
+    for(let si=0; si<segs; si++){
+      const A = a.nodes[si], B = a.nodes[(si+1)%n];
+      const p0=A.p, p3=B.p;
+      const p1=[p0[0]+A.hOut[0], p0[1]+A.hOut[1]];
+      const p2=[p3[0]+B.hIn[0],  p3[1]+B.hIn[1]];
+      let prev = p0;
+      for(let k=1;k<=SUBS;k++){
+        const t=k/SUBS, u=1-t, uu=u*u, tt=t*t;
+        const x = uu*u*p0[0] + 3*uu*t*p1[0] + 3*u*tt*p2[0] + tt*t*p3[0];
+        const y = uu*u*p0[1] + 3*uu*t*p1[1] + 3*u*tt*p2[1] + tt*t*p3[1];
+        const [d,cx,cy] = distToSeg(wx,wy, prev[0],prev[1], x,y);
+        if(d<tol && (!best || d<best.worldDist)){
+          best = {i, seg:si, t:(k-0.5)/SUBS, point:[cx,cy], worldDist:d};
+        }
+        prev=[x,y];
+      }
+    }
+  }
+  return best;
+}
+
+// Subdivide cubic bezier at t; returns {mid, leftHOut, rightHIn, midHIn, midHOut}
+function bezierSplit(p0,p1,p2,p3, t){
+  const L = (a,b)=>[a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+  const q0=L(p0,p1), q1=L(p1,p2), q2=L(p2,p3);
+  const r0=L(q0,q1), r1=L(q1,q2);
+  const s =L(r0,r1);
+  // New node at s, with mirrored-to-tangent handles: hIn=r0-s, hOut=r1-s
+  return {
+    mid:s,
+    newLeftHOut:[q0[0]-p0[0], q0[1]-p0[1]],    // replaces A.hOut
+    newRightHIn:[q2[0]-p3[0], q2[1]-p3[1]],    // replaces B.hIn
+    midHIn:[r0[0]-s[0], r0[1]-s[1]],
+    midHOut:[r1[0]-s[0], r1[1]-s[1]],
+  };
+}
+
+// Insert a new node into an existing pen attractor at the nearest-curve point.
+function insertPenVertex(attractor, wx, wy){
+  const a = attractor;
+  const n = a.nodes.length;
+  const segs = a.closed ? n : n-1;
+  const SUBS = 60;
+  let bestSeg=-1, bestT=0, bd=Infinity;
+  for(let si=0; si<segs; si++){
+    const A = a.nodes[si], B = a.nodes[(si+1)%n];
+    const p0=A.p, p3=B.p;
+    const p1=[p0[0]+A.hOut[0], p0[1]+A.hOut[1]];
+    const p2=[p3[0]+B.hIn[0],  p3[1]+B.hIn[1]];
+    for(let k=0;k<=SUBS;k++){
+      const t=k/SUBS, u=1-t, uu=u*u, tt=t*t;
+      const x = uu*u*p0[0] + 3*uu*t*p1[0] + 3*u*tt*p2[0] + tt*t*p3[0];
+      const y = uu*u*p0[1] + 3*uu*t*p1[1] + 3*u*tt*p2[1] + tt*t*p3[1];
+      const d = Math.hypot(x-wx, y-wy);
+      if(d<bd){ bd=d; bestSeg=si; bestT=t; }
+    }
+  }
+  if(bestSeg<0) return -1;
+  const A = a.nodes[bestSeg], B = a.nodes[(bestSeg+1)%n];
+  const p0=A.p, p3=B.p;
+  const p1=[p0[0]+A.hOut[0], p0[1]+A.hOut[1]];
+  const p2=[p3[0]+B.hIn[0],  p3[1]+B.hIn[1]];
+  const sp = bezierSplit(p0,p1,p2,p3, bestT);
+  A.hOut = sp.newLeftHOut;
+  B.hIn  = sp.newRightHIn;
+  const newNode = { p:sp.mid, hIn:sp.midHIn, hOut:sp.midHOut };
+  a.nodes.splice(bestSeg+1, 0, newNode);
+  invalidateFlat(a);
+  return bestSeg+1;
+}
+
+cnv.addEventListener('contextmenu', e => e.preventDefault());
+
+cnv.addEventListener('mousedown', e => {
+  const r = cnv.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const [wx,wy] = screenToWorld(sx,sy);
+
+  if(S.spaceDown || e.button === 1){
+    panning = true;
+    panStart = {sx, sy, panX:S.panX, panY:S.panY};
+    e.preventDefault();
+    return;
+  }
+
+  if(e.button === 2){
+    const hit = pickAttractor(wx,wy, 12);
+    if(hit){
+      pushHistory();
+      S.attractors.splice(hit.i,1);
+      pruneMultiAfterDelete(hit.i);
+      if(S.selected===hit.i) selectAttractor(-1);
+      else if(S.selected>hit.i) S.selected--;
+      renderAList(); draw();
+    }
+    return;
+  }
+
+  // Reference-image drag (only when unlocked + visible). Comes before
+  // attractor handling so the user can grab the image even where it
+  // overlaps an attractor's bounding circle.
+  if(imageHit(wx, wy)){
+    drag = { kind:'image', startX:wx, startY:wy, imgX0:S.image.x, imgY0:S.image.y };
+    cnv.style.cursor = 'grabbing';
+    return;
+  }
+
+  // Free-transform: scale handles on the selected pen/ellipse attractor.
+  // A vertex/handle hit on the selected attractor wins, so dragging a node
+  // at an extremum still drags the node rather than starting a scale drag.
+  if(S.selected>=0 && !S.hideAttractors){
+    const selA = S.attractors[S.selected];
+    if(selA && (selA.type==='pen' || selA.type==='ellipse' || selA.type==='box')){
+      const vh = pickAttractor(wx, wy, 10);
+      const onVertex = vh && vh.i===S.selected && vh.vertex !== -1;
+      const bb = onVertex ? null : attractorBBox(selA);
+      if(bb){
+        const corners = bboxCorners(bb);
+        const tol = 10 / S.zoom;
+        for(let c=0;c<4;c++){
+          const d = Math.hypot(corners[c][0]-wx, corners[c][1]-wy);
+          if(d < tol){
+            pushHistory();
+            drag = {
+              i: S.selected, vertex: 'scale',
+              pivotCorner: corners[(c+2)%4],
+              pivotCenter: [(bb.x0+bb.x1)/2, (bb.y0+bb.y1)/2],
+              start: [wx, wy],
+              startSnap: JSON.parse(JSON.stringify({...selA, _flat:undefined})),
+              uniform: e.shiftKey,
+              lastX: wx, lastY: wy,
+            };
+            draw();
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  // Magnetic anchor on the selected attractor wins over every tool.
+  // pickAttractor already returns vertex:'mag' as the highest-priority hit,
+  // but we re-check explicitly so the pen tool's special branches don't swallow it.
+  if(S.selected>=0 && S.attractors[S.selected] && S.attractors[S.selected].magLocked === false){
+    const selA = S.attractors[S.selected];
+    const m = magPoint(selA);
+    const dM = Math.hypot(m[0]-wx, m[1]-wy);
+    if(dM * S.zoom < 12){
+      pushHistory();
+      drag = { i: S.selected, vertex: 'mag', lastX: wx, lastY: wy };
+      draw();
+      return;
+    }
+  }
+
+  if(S.tool==='pen'){
+    // 0) Alt+click on existing pen path → duplicate & drag the clone
+    if(e.altKey && !S.draft){
+      let srcI = -1;
+      const hitV = pickAttractor(wx,wy, 12);
+      if(hitV && S.attractors[hitV.i].type==='pen') srcI = hitV.i;
+      else {
+        const ph = nearestPenHit(wx, wy, 12);
+        if(ph) srcI = ph.i;
+      }
+      if(srcI>=0){
+        pushHistory();
+        const newI = duplicateAttractor(srcI, 0, 0);
+        drag = { i:newI, vertex:-1, lastX:wx, lastY:wy };
+        cnv.style.cursor = 'grabbing';
+        draw();
+        return;
+      }
+    }
+    // 1) First priority: drag existing vertex/handle on selected pen
+    const hit = pickAttractor(wx,wy, 10);
+    if(hit && S.attractors[hit.i].type==='pen' && hit.vertex>=0){
+      pushHistory();
+      selectAttractor(hit.i);
+      drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
+      return;
+    }
+    // 2) Currently drafting a path
+    if(S.draft){
+      // close if clicking on first vertex
+      if(S.draft.nodes.length>=2){
+        const [fx,fy] = S.draft.nodes[0].p;
+        if(Math.hypot(wx-fx, wy-fy)*S.zoom < 12){ commitDraft(true); return; }
+      }
+      // Shift-snap: like Illustrator's pen tool, hold Shift while clicking
+      // to constrain the new vertex's direction (relative to the previous
+      // vertex) to the nearest 45° axis.
+      let pos = [wx, wy];
+      if(e.shiftKey && S.draft.nodes.length > 0){
+        pos = snapToAxisStep(S.draft.nodes[S.draft.nodes.length-1].p, pos, 45);
+      }
+      S.draft.nodes.push({ p:pos, hIn:[0,0], hOut:[0,0] });
+      S.draft.dragNode = S.draft.nodes.length-1; // drag to set handles
+      draw();
+      return;
+    }
+    // 3) Near an existing pen path → insert a new vertex there
+    const penHit = nearestPenHit(wx, wy, 10);
+    if(penHit){
+      pushHistory();
+      const idx = insertPenVertex(S.attractors[penHit.i], wx, wy);
+      selectAttractor(penHit.i);
+      drag = { i:penHit.i, vertex:idx*10+0, lastX:wx, lastY:wy };
+      draw();
+      return;
+    }
+    // 4) Otherwise start a new pen draft at this point — unless lockAdd is on.
+    if(S.lockAdd) return;
+    startDraft();
+    S.draft.nodes.push({ p:[wx,wy], hIn:[0,0], hOut:[0,0] });
+    S.draft.dragNode = 0;
+    draw();
+    return;
+  }
+
+  if(S.tool==='gradient' || S.tool==='ellipse' || S.tool==='box'){
+    const t = S.tool;
+    const hit = pickAttractor(wx,wy, 12);
+    if(hit && S.attractors[hit.i].type===t){
+      pushHistory();
+      selectAttractor(hit.i);
+      drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
+    } else if(!S.lockAdd){
+      pushHistory();
+      let att;
+      if(t==='gradient')      att = { ...aBase(), type:'gradient', a:[wx,wy], b:[wx,wy], mag:[wx,wy], inverted:true };
+      else if(t==='ellipse')  att = { ...aBase(), type:'ellipse', x:wx, y:wy, rx:1, ry:1, rot:0, mag:[wx,wy], solid:true };
+      else                    att = { ...aBase(), type:'box', x:wx, y:wy, w:2, h:2, rot:0, cornerR:0, mag:[wx,wy], solid:true };
+      const i = addAttractor(att);
+      if(t==='gradient')      drag = { i, vertex:1, lastX:wx, lastY:wy };
+      else if(t==='ellipse')  drag = { i, vertex:'createEllipse', startX:wx, startY:wy, lastX:wx, lastY:wy };
+      else                    drag = { i, vertex:'createBox',     startX:wx, startY:wy, lastX:wx, lastY:wy };
+    } else return;
+    draw();
+    return;
+  }
+
+  const hit = pickAttractor(wx,wy, 12);
+  if(hit){
+    pushHistory();
+    selectAttractor(hit.i);
+    drag = { i:hit.i, vertex:hit.vertex, lastX:wx, lastY:wy };
+  } else if(!S.lockAdd){
+    pushHistory();
+    const i = addAttractor({ ...aBase(), type:'point', x:wx, y:wy, mag:[wx,wy] });
+    drag = { i, vertex:-1, lastX:wx, lastY:wy };
+  } else return;
+  draw();
+});
+
+cnv.addEventListener('dblclick', () => {
+  if(S.tool==='pen' && S.draft){ commitDraft(false); }
+});
+
+addEventListener('mousemove', e => {
+  const r = cnv.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  let [wx,wy] = screenToWorld(sx,sy);
+  S.mouseW = [wx,wy];
+
+  if(panning){
+    S.panX = panStart.panX + (sx - panStart.sx);
+    S.panY = panStart.panY + (sy - panStart.sy);
+    draw(); return;
+  }
+
+  // Pen draft: drag to set the outgoing handle of the last-added node (smooth point)
+  if(S.tool==='pen' && S.draft){
+    if(drag==null && S.draft.dragNode>=0 && (e.buttons & 1)){
+      const nd = S.draft.nodes[S.draft.dragNode];
+      const hx = wx - nd.p[0], hy = wy - nd.p[1];
+      nd.hOut = [hx, hy];
+      nd.hIn  = [-hx, -hy];
+    }
+    draw();
+    updatePenCursor();
+    return;
+  }
+
+  // Cursor feedback (hover): pointer over attractors, pen-specific otherwise
+  if(!drag){ updateHoverCursor(); }
+
+  if(drag==null) return;
+
+  // Reference-image drag: independent of any attractor.
+  if(drag.kind === 'image'){
+    S.image.x = drag.imgX0 + (wx - drag.startX);
+    S.image.y = drag.imgY0 + (wy - drag.startY);
+    draw();
+    return;
+  }
+
+  const a = S.attractors[drag.i];
+
+  // Ctrl-snap: when held during a whole-attractor translate, snap the cursor
+  // to the nearest other attractor's centre so two attractors share an origin.
+  // Skipped for scale/mag/create drags (those manipulate geometry, not position).
+  if((e.ctrlKey || e.metaKey) && drag.vertex !== 'scale' && drag.vertex !== 'mag'
+     && drag.vertex !== 'createEllipse' && drag.vertex !== 'createBox'){
+    const isTranslate =
+      (a.type==='point') ||
+      ((a.type==='ellipse' || a.type==='box') && (drag.vertex===0 || drag.vertex===-1)) ||
+      (a.type==='gradient') ||
+      (a.type==='pen' && drag.vertex < 0);
+    if(isTranslate){
+      const c = snapToNearestCenter(wx, wy, drag.i);
+      wx = c[0]; wy = c[1];
+    }
+  }
+
+  // Magnetic-anchor drag (independent of geometry)
+  if(drag.vertex === 'mag'){
+    a.mag = [wx, wy];
+    drag.lastX = wx; drag.lastY = wy;
+    draw();
+    return;
+  }
+
+  // Free-transform scale drag
+  if(drag.vertex === 'scale'){
+    // Hold Alt to scale around the bbox center (origin-locked); release to
+    // anchor at the opposite corner. Pivot can flip mid-drag.
+    const piv = e.altKey ? drag.pivotCenter : drag.pivotCorner;
+    const px = piv[0], py = piv[1];
+    const sx = drag.start[0], sy = drag.start[1];
+    let kx = (wx-px)/((sx-px) || 1e-9);
+    let ky = (wy-py)/((sy-py) || 1e-9);
+    const uniform = e.shiftKey || drag.uniform || a.type==='ellipse';
+    if(uniform){ const k = Math.max(Math.abs(kx), Math.abs(ky)); kx = Math.sign(kx||1)*k; ky = Math.sign(ky||1)*k; }
+    const src = drag.startSnap;
+    if(a.type==='pen'){
+      for(let n=0;n<a.nodes.length;n++){
+        const sn = src.nodes[n];
+        a.nodes[n].p[0] = px + (sn.p[0]-px)*kx;
+        a.nodes[n].p[1] = py + (sn.p[1]-py)*ky;
+        a.nodes[n].hIn[0]  = sn.hIn[0]*kx;
+        a.nodes[n].hIn[1]  = sn.hIn[1]*ky;
+        a.nodes[n].hOut[0] = sn.hOut[0]*kx;
+        a.nodes[n].hOut[1] = sn.hOut[1]*ky;
+      }
+    } else if(a.type==='ellipse'){
+      const k = Math.abs(kx); // uniform for ellipse
+      a.x  = px + (src.x-px)*kx;
+      a.y  = py + (src.y-py)*ky;
+      a.rx = Math.max(1, src.rx * k);
+      a.ry = Math.max(1, src.ry * k);
+    } else if(a.type==='box'){
+      a.x = px + (src.x-px)*kx;
+      a.y = py + (src.y-py)*ky;
+      a.w = Math.max(2, src.w * Math.abs(kx));
+      a.h = Math.max(2, src.h * Math.abs(ky));
+      syncBoxSize();
+    }
+    if(src.mag && a.mag){
+      a.mag[0] = px + (src.mag[0]-px)*kx;
+      a.mag[1] = py + (src.mag[1]-py)*ky;
+    }
+    if(a.type === 'ellipse') syncEllipseSize();
+    invalidateFlat(a);
+    draw();
+    return;
+  }
+
+  if(a.type==='pen'){
+    const v = drag.vertex;
+    if(v>=0){
+      const k = Math.floor(v/10), kind = v%10;
+      const nd = a.nodes[k];
+      if(kind===0){
+        // Hold Shift while dragging a vertex to constrain its position to a
+        // 45° increment relative to its previous neighbour in the path —
+        // matches Illustrator's pen-tool shift-drag.
+        let pos = [wx, wy];
+        if(e.shiftKey){
+          const n = a.nodes.length;
+          let neighbor = null;
+          if(k > 0) neighbor = a.nodes[k-1];
+          else if(a.closed && n > 1) neighbor = a.nodes[n-1];
+          else if(n > 1) neighbor = a.nodes[1];     // open path start: snap to next instead
+          if(neighbor) pos = snapToAxisStep(neighbor.p, pos, 45);
+        }
+        nd.p = pos;
+        // move-with-point: handles are relative, stay in place
+      } else if(kind===1){
+        nd.hIn  = [wx - nd.p[0], wy - nd.p[1]];
+        nd.hOut = [-nd.hIn[0], -nd.hIn[1]]; // smooth mirror
+      } else {
+        nd.hOut = [wx - nd.p[0], wy - nd.p[1]];
+        nd.hIn  = [-nd.hOut[0], -nd.hOut[1]];
+      }
+    } else {
+      const dx = wx - drag.lastX, dy = wy - drag.lastY;
+      for(const nd of a.nodes){ nd.p[0]+=dx; nd.p[1]+=dy; }
+      if(a.mag){ a.mag[0]+=dx; a.mag[1]+=dy; }
+    }
+    invalidateFlat(a);
+  } else if(a.type==='ellipse'){
+    const v = drag.vertex;
+    if(v==='createEllipse'){
+      a.rot = 0;
+      let dxA = Math.abs(wx - drag.startX);
+      let dyA = Math.abs(wy - drag.startY);
+      if(e.shiftKey){                         // hold Shift → constrain to circle
+        const r = Math.max(dxA, dyA);
+        dxA = r; dyA = r;
+      }
+      a.rx = Math.max(1, dxA);
+      a.ry = Math.max(1, dyA);
+      invalidateFlat(a);
+      syncEllipseSize();
+    } else if(v===0 || v===-1){
+      const dx = wx - drag.lastX, dy = wy - drag.lastY;
+      a.x += dx; a.y += dy;
+      if(a.mag){ a.mag[0]+=dx; a.mag[1]+=dy; }
+    } else if(v===1){
+      const dx = wx - a.x, dy = wy - a.y;
+      const L = Math.hypot(dx,dy) || 1;
+      a.rot = Math.atan2(dy, dx);
+      a.rx = L;
+      if(!a.ry || a.ry<=0.1) a.ry = L*0.5;
+      syncEllipseSize();
+    } else if(v===2){
+      const dx = wx - a.x, dy = wy - a.y;
+      const c=Math.cos(a.rot), s=Math.sin(a.rot);
+      const ry = Math.abs(dx*(-s) + dy*c);
+      a.ry = Math.max(1, ry);
+      syncEllipseSize();
+    }
+    invalidateFlat(a);
+  } else if(a.type==='box'){
+    const v = drag.vertex;
+    if(v==='createBox'){
+      // Drag-out from initial click — sets w/h relative to start point.
+      a.x = (drag.startX + wx)/2;
+      a.y = (drag.startY + wy)/2;
+      let dxA = Math.abs(wx - drag.startX);
+      let dyA = Math.abs(wy - drag.startY);
+      if(e.shiftKey){ const r = Math.max(dxA, dyA); dxA = r; dyA = r; }
+      a.w = Math.max(2, dxA);
+      a.h = Math.max(2, dyA);
+      if(a.mag) a.mag = [a.x, a.y];
+      invalidateFlat(a);
+      syncBoxSize();
+    } else if(v===0 || v===-1){
+      const dx = wx - drag.lastX, dy = wy - drag.lastY;
+      a.x += dx; a.y += dy;
+      if(a.mag){ a.mag[0]+=dx; a.mag[1]+=dy; }
+      invalidateFlat(a);
+    }
+  } else if(a.type==='gradient'){
+    if(drag.vertex===0)      a.a = [wx,wy];
+    else if(drag.vertex===1) a.b = [wx,wy];
+    else {
+      const dx = wx - drag.lastX, dy = wy - drag.lastY;
+      a.a[0]+=dx; a.a[1]+=dy; a.b[0]+=dx; a.b[1]+=dy;
+      if(a.mag){ a.mag[0]+=dx; a.mag[1]+=dy; }
+    }
+  } else {
+    const dx = wx - a.x, dy = wy - a.y;
+    a.x = wx; a.y = wy;
+    if(a.mag){ a.mag[0]+=dx; a.mag[1]+=dy; }
+  }
+  drag.lastX = wx; drag.lastY = wy;
+  draw();
+});
+
+// Pen-shaped cursor for the pen tool — inline SVG so it stays crisp at any
+// DPR. Hotspot (3, 21) is the pen tip in the 24x24 art.
+const PEN_CURSOR = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><path d='M3 21l4-1 12-12-3-3-12 12-1 4z' fill='white' stroke='black' stroke-width='1.5' stroke-linejoin='round'/><path d='M14 5l3 3' stroke='black' stroke-width='1.5'/></svg>\") 3 21, crosshair";
+function updatePenCursor(){
+  if(S.tool!=='pen'){ cnv.style.cursor = 'default'; return; }
+  if(S.draft){ cnv.style.cursor = PEN_CURSOR; return; }
+  const hit = nearestPenHit(S.mouseW[0], S.mouseW[1], 10);
+  cnv.style.cursor = hit ? 'copy' : PEN_CURSOR;
+}
+
+function updateHoverCursor(){
+  if(panning || drag) return;            // active interaction owns the cursor
+  if(S.spaceDown){ cnv.style.cursor = 'grab'; return; }
+  if(imageHit(S.mouseW[0], S.mouseW[1])){ cnv.style.cursor = 'grab'; return; }
+  if(S.tool === 'pen'){ updatePenCursor(); return; }
+  const hit = pickAttractor(S.mouseW[0], S.mouseW[1], 12);
+  if(hit && hit.vertex === 'mag') cnv.style.cursor = 'move';
+  else cnv.style.cursor = hit ? 'pointer' : 'default';
+}
+
+addEventListener('mouseup', () => {
+  drag = null; panning = false;
+  if(S.draft) S.draft.dragNode = -1;
+});
+
+cnv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = cnv.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+
+  if(e.shiftKey){
+    const [wx,wy] = screenToWorld(sx,sy);
+    const hit = pickAttractor(wx,wy, 9999);
+    if(!hit) return;
+    const now = performance.now();
+    if(now - S.lastWheelPushAt > 500) pushHistory();
+    S.lastWheelPushAt = now;
+    const f = Math.exp(-e.deltaY * 0.0015);
+    const tgt = S.attractors[hit.i];
+    tgt.r = clamp(tgt.r * f, 5, 5000);
+    if(S.selected===hit.i){
+      $('aFalloff').value = tgt.r;
+      $('aFalloffV').value = Math.round(tgt.r);
+      S.aFalloff = tgt.r;
+    }
+    draw();
+    return;
+  }
+
+  // Scroll to zoom (zoom at cursor)
+  const factor = Math.exp(-e.deltaY * 0.0015);
+  // Cap zoom-out at 25% so the user can't zoom past the workable range.
+  const newZoom = clamp(S.zoom * factor, 0.25, 40);
+  S.panX = sx - (sx - S.panX) * (newZoom / S.zoom);
+  S.panY = sy - (sy - S.panY) * (newZoom / S.zoom);
+  S.zoom = newZoom;
+  draw();
+}, {passive:false});
+
+addEventListener('keydown', e => {
+  // Ignore key handling while typing in an input/textarea (e.g. attractor name field)
+  const t = e.target;
+  const inField = t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable);
+
+  const mod = e.ctrlKey || e.metaKey;
+  if(mod && (e.key==='z' || e.key==='Z')){
+    e.preventDefault();
+    if(e.shiftKey) redoFn(); else undo();
+    return;
+  }
+  if(mod && (e.key==='y' || e.key==='Y')){ e.preventDefault(); redoFn(); return; }
+  if(mod && (e.key==='d' || e.key==='D')){
+    e.preventDefault();
+    if(S.selected>=0 && S.attractors[S.selected]){
+      pushHistory(); duplicateAttractor(S.selected);
+    }
+    return;
+  }
+  if(!inField && (e.key==='Delete' || e.key==='Backspace')){
+    if(S.selected>=0 && S.attractors[S.selected]){
+      e.preventDefault();
+      pushHistory();
+      S.attractors.splice(S.selected,1);
+      selectAttractor(-1);
+      renderAList();
+      draw();
+      return;
+    }
+  }
+  if(e.code==='Space' && !e.repeat){ S.spaceDown = true; cnv.style.cursor='grab'; }
+  if(e.key === 'Shift' && !S.shiftDown){
+    S.shiftDown = true;
+    if(S.tool === 'pen' && S.draft) draw();   // refresh dashed preview
+  }
+  if(e.code==='Enter' && S.tool==='pen' && S.draft){ commitDraft(false); }
+  if(e.code==='Escape' && S.tool==='pen' && S.draft){ cancelDraft(); }
+  if(!mod && (e.key==='p' || e.key==='P')){ pickTool('pen'); }
+  if(!mod && (e.key==='v' || e.key==='V')){ pickTool('point'); }
+  if(!mod && (e.key==='e' || e.key==='E')){ pickTool('ellipse'); }
+  if(!mod && (e.key==='g' || e.key==='G')){ pickTool('gradient'); }
+  if(!mod && (e.key==='0')){ S.zoom=1; S.panX=S.w/2; S.panY=S.h/2; draw(); }
+});
+addEventListener('keyup', e => {
+  if(e.code==='Space'){ S.spaceDown = false; updateHoverCursor(); }
+  if(e.key === 'Shift' && S.shiftDown){
+    S.shiftDown = false;
+    if(S.tool === 'pen' && S.draft) draw();
+  }
+});
+
+function pickTool(t){
+  S.tool = t;
+  document.querySelectorAll('#atool button').forEach(b => b.classList.toggle('on', b.dataset.t===t));
+  if(t!=='pen' && S.draft) cancelDraft();
+  $('toolTag').classList.toggle('on', t==='pen');
+  $('gradTag').classList.toggle('on', t==='gradient');
+  cnv.style.cursor = t==='pen' ? PEN_CURSOR : 'default';
+  draw();
+}
+
+// ---------- export ----------
+// Render the current scene at a given resolution multiplier into an
+// offscreen canvas and return a PNG data-url. Temporarily swaps the global
+// `ctx` and `S.dpr` so existing draw functions render straight into the
+// offscreen target — no parallel render pipeline to maintain.
+function renderPNG(scale){
+  scale = scale || 1;
+  const off = document.createElement('canvas');
+  off.width  = Math.round(S.w * S.dpr * scale);
+  off.height = Math.round(S.h * S.dpr * scale);
+  const offCtx = off.getContext('2d');
+
+  const origCtx = ctx;
+  const origDpr = S.dpr;
+  const origHide = S.hideAttractors;
+  const origImgVis = S.image.visible;
+
+  ctx = offCtx;
+  S.dpr = origDpr * scale;
+  S.hideAttractors = true;          // never bake handles into the export
+  S.image.visible = false;          // reference image is design-time only
+  try {
+    draw();
+    return off.toDataURL('image/png');
+  } finally {
+    ctx = origCtx;
+    S.dpr = origDpr;
+    S.hideAttractors = origHide;
+    S.image.visible = origImgVis;
+    draw();                          // restore the on-screen render
+  }
+}
+// Render a specific WORLD-space rectangle into a PNG data-url. The rectangle
+// is translated into the canvas viewport by re-pointing pan/zoom/w/h at the
+// region, drawing once into an offscreen canvas, then restoring everything.
+function renderPNGRegion(region, scale){
+  scale = scale || 1;
+  const baseZoom = S.zoom;
+  const pxW = Math.max(1, Math.round(region.w * baseZoom));
+  const pxH = Math.max(1, Math.round(region.h * baseZoom));
+  const off = document.createElement('canvas');
+  off.width  = pxW * scale;
+  off.height = pxH * scale;
+  const offCtx = off.getContext('2d');
+  const o = { ctx, dpr:S.dpr, panX:S.panX, panY:S.panY, zoom:S.zoom,
+              w:S.w, h:S.h, hide:S.hideAttractors, imgVis:S.image.visible };
+  ctx = offCtx;
+  S.dpr = scale;
+  S.zoom = baseZoom;
+  S.panX = -region.x * baseZoom;
+  S.panY = -region.y * baseZoom;
+  S.w = pxW; S.h = pxH;
+  S.hideAttractors = true; S.image.visible = false;
+  try {
+    draw();
+    return off.toDataURL('image/png');
+  } finally {
+    ctx = o.ctx;
+    S.dpr = o.dpr; S.panX = o.panX; S.panY = o.panY; S.zoom = o.zoom;
+    S.w = o.w; S.h = o.h;
+    S.hideAttractors = o.hide; S.image.visible = o.imgVis;
+    draw();
+  }
+}
+function renderSVGRegion(region){
+  const baseZoom = S.zoom;
+  const pxW = Math.max(1, Math.round(region.w * baseZoom));
+  const pxH = Math.max(1, Math.round(region.h * baseZoom));
+  const o = { panX:S.panX, panY:S.panY, w:S.w, h:S.h };
+  S.panX = -region.x * baseZoom;
+  S.panY = -region.y * baseZoom;
+  S.w = pxW; S.h = pxH;
+  try {
+    const parts = [];
+    parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${pxW}" height="${pxH}" viewBox="0 0 ${pxW} ${pxH}">`);
+    parts.push(`<rect width="100%" height="100%" fill="${S.bg}"/>`);
+    renderSVGGrid(parts);
+    parts.push('</svg>');
+    return parts.join('');
+  } finally {
+    S.panX = o.panX; S.panY = o.panY; S.w = o.w; S.h = o.h;
+  }
+}
+// Bounding rectangle (world coords) of all unmuted attractors, padded by
+// each one's falloff Radius so the field gradient isn't clipped at the edge.
+function computeAttractorBounds(){
+  if(!S.attractors.length) return null;
+  let x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity, any=false;
+  for(const a of S.attractors){
+    if(a.muted) continue;
+    let bb = attractorBBox(a);
+    if(!bb){
+      if(a.type === 'point'){
+        bb = { x0:a.x-a.r, y0:a.y-a.r, x1:a.x+a.r, y1:a.y+a.r };
+      } else if(a.type === 'gradient'){
+        const minx = Math.min(a.a[0], a.b[0]) - a.r;
+        const maxx = Math.max(a.a[0], a.b[0]) + a.r;
+        const miny = Math.min(a.a[1], a.b[1]) - a.r;
+        const maxy = Math.max(a.a[1], a.b[1]) + a.r;
+        bb = { x0:minx, y0:miny, x1:maxx, y1:maxy };
+      } else continue;
+    } else {
+      bb = { x0:bb.x0-a.r, y0:bb.y0-a.r, x1:bb.x1+a.r, y1:bb.y1+a.r };
+    }
+    if(bb.x0 < x0) x0 = bb.x0;
+    if(bb.y0 < y0) y0 = bb.y0;
+    if(bb.x1 > x1) x1 = bb.x1;
+    if(bb.y1 > y1) y1 = bb.y1;
+    any = true;
+  }
+  return any ? { x:x0, y:y0, w:x1-x0, h:y1-y0 } : null;
+}
+// Snip overlay: drag to define a screen rectangle, returns world region or null.
+function startSnipTool(){
+  return new Promise(resolve => {
+    const layer = $('snipLayer'), rect = $('snipRect');
+    layer.style.display = 'block';
+    rect.style.display  = 'none';
+    let dragging = false, sx = 0, sy = 0;
+    const cleanup = () => {
+      layer.style.display = 'none';
+      layer.removeEventListener('mousedown', onDown);
+      layer.removeEventListener('mousemove', onMove);
+      layer.removeEventListener('mouseup',   onUp);
+      removeEventListener('keydown', onKey);
+    };
+    const onKey = ev => { if(ev.key === 'Escape'){ cleanup(); resolve(null); } };
+    const onDown = ev => {
+      dragging = true; sx = ev.clientX; sy = ev.clientY;
+      rect.style.left = sx + 'px'; rect.style.top = sy + 'px';
+      rect.style.width = '0px';   rect.style.height = '0px';
+      rect.style.display = 'block';
+    };
+    const onMove = ev => {
+      if(!dragging) return;
+      const x = Math.min(sx, ev.clientX), y = Math.min(sy, ev.clientY);
+      rect.style.left = x + 'px'; rect.style.top = y + 'px';
+      rect.style.width  = Math.abs(ev.clientX - sx) + 'px';
+      rect.style.height = Math.abs(ev.clientY - sy) + 'px';
+    };
+    const onUp = ev => {
+      if(!dragging) return;
+      dragging = false;
+      const x = Math.min(sx, ev.clientX), y = Math.min(sy, ev.clientY);
+      const w = Math.abs(ev.clientX - sx), h = Math.abs(ev.clientY - sy);
+      cleanup();
+      if(w < 8 || h < 8){ resolve(null); return; }
+      const r = cnv.getBoundingClientRect();
+      const [wx0, wy0] = screenToWorld(x - r.left,         y - r.top);
+      const [wx1, wy1] = screenToWorld(x - r.left + w,     y - r.top + h);
+      resolve({ x:wx0, y:wy0, w:wx1-wx0, h:wy1-wy0 });
+    };
+    layer.addEventListener('mousedown', onDown);
+    layer.addEventListener('mousemove', onMove);
+    layer.addEventListener('mouseup',   onUp);
+    addEventListener('keydown', onKey);
+  });
+}
+// Export pipeline: PNG / SVG buttons open the region picker, picker calls
+// the matching writer with a region (or null = whole canvas).
+function downloadPNG(region, scale, tag){
+  const link = document.createElement('a');
+  const sx = scale === 1 ? '' : `_${scale}x`;
+  link.download = `pixpat_${S.shape}${sx}_${tag}_${Date.now()}.png`;
+  link.href = region ? renderPNGRegion(region, scale) : renderPNG(scale);
+  link.click();
+}
+function downloadSVG(region, tag){
+  const svg = region ? renderSVGRegion(region) :
+    (() => {
+      const parts = [];
+      parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${S.w}" height="${S.h}" viewBox="0 0 ${S.w} ${S.h}">`);
+      parts.push(`<rect width="100%" height="100%" fill="${S.bg}"/>`);
+      renderSVGGrid(parts);
+      parts.push('</svg>');
+      return parts.join('');
+    })();
+  const blob = new Blob([svg], {type:'image/svg+xml'});
+  const link = document.createElement('a');
+  link.download = `pixpat_${S.shape}_${tag}_${Date.now()}.svg`;
+  link.href = URL.createObjectURL(blob);
+  link.click();
+}
+let pendingExportFormat = 'png';
+function openExportPicker(format){
+  pendingExportFormat = format;
+  $('exportTitle').textContent = 'Export ' + format.toUpperCase();
+  $('exportModal').classList.add('on');
+}
+async function runExport(mode){
+  $('exportModal').classList.remove('on');
+  let region = null;
+  if(mode === 'attr'){
+    region = computeAttractorBounds();
+    if(!region){ alert('No attractors to export.'); return; }
+  } else if(mode === 'snip'){
+    region = await startSnipTool();
+    if(!region) return;
+  }
+  if(pendingExportFormat === 'png'){
+    const scale = parseInt($('pngScale').value, 10) || 1;
+    downloadPNG(region, scale, mode);
+  } else {
+    downloadSVG(region, mode);
+  }
+}
+$('png').addEventListener('click', () => openExportPicker('png'));
+$('svg').addEventListener('click', () => openExportPicker('svg'));
+$('expWhole').addEventListener('click', () => runExport('whole'));
+$('expAttr').addEventListener('click',  () => runExport('attr'));
+$('expSnip').addEventListener('click',  () => runExport('snip'));
+$('expCancel').addEventListener('click', () => $('exportModal').classList.remove('on'));
+
+function renderSVGGrid(out){
+  const s = S.size;
+  const vb = viewBounds();
+  const sp = S.scale;
+  const baseCorner = S.corner/100;
+  const toScreen = (x,y) => [x*S.zoom + S.panX, y*S.zoom + S.panY];
+  const strokeAttr = S.stroke>0 ? ` stroke-width="${S.stroke}"` : '';
+
+  const emit = (cx, cy) => {
+    const f = fields(cx, cy);
+    const scale = clamp(1 + f.scale, 0, 2);
+    let fillColor = S.fg;
+    if(f.hole < -0.02) return;
+    if(f.hole !== 0){
+      const t = clamp((f.hole+1)/2, 0, 1);
+      fillColor = mixHex(fillColor, S.bg, 1 - t);
+    }
+    let sz = s*Math.max(0.02, scale)*sp;
+    if(f.halftone > 0)      sz = lerp(sz, s * scale,  f.halftone);
+    else if(f.halftone < 0) sz = lerp(sz, 0,         -f.halftone);
+    if(sz <= 0.5) return;
+    const [Sx, Sy] = toScreen(cx+f.px, cy+f.py);
+    const SS = sz * S.zoom;
+    const half = SS/2;
+    const fillA = S.fill ? fillColor : 'none';
+    const strokeA = S.stroke>0 ? ` stroke="${fillColor}"` : '';
+    const t = `transform="translate(${Sx.toFixed(2)},${Sy.toFixed(2)})"`;
+    const pts = S.customPts;
+    if(!pts || pts.length<2) return;
+    const subs = splitNullSubpaths(pts);
+    const cr = clamp(baseCorner*SS, 0, half);
+    const hasAnyVertexR = S.liveCorner && pts.some(p => p && p.length === 3 && p[2] > 0);
+    let d = '';
+    for(const sub of subs){
+      if(sub.length < 2) continue;
+      if((cr <= 0.5 && !hasAnyVertexR) || sub.length < 3 || !S.customClosed){
+        for(let k=0;k<sub.length;k++){
+          const cmd = k===0 ? 'M' : 'L';
+          d += cmd + (sub[k][0]*SS).toFixed(2) + ' ' + (sub[k][1]*SS).toFixed(2) + ' ';
+        }
+        if(S.customClosed) d += 'Z ';
+      } else {
+        d += roundedSubpathSVG(sub, SS, cr) + ' ';
+      }
+    }
+    if(d) out.push(`<path ${t} d="${d.trim()}" fill="${fillA}"${strokeA}${strokeAttr}/>`);
+  };
+
+  if(S.tileType === 'radial'){
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    const step    = s * (S.radialSpacing || 1);
+    const density = S.radialDensity || 1;
+    const twist   = S.radialTwist == null ? 1 : S.radialTwist;
+    const orient  = (S.radialOrient || 0) * Math.PI / 180;
+    const maxR = Math.max(
+      Math.hypot(vb.x0, vb.y0), Math.hypot(vb.x1, vb.y0),
+      Math.hypot(vb.x0, vb.y1), Math.hypot(vb.x1, vb.y1)
+    ) + step;
+    emit(0, 0);
+    for(let ring=1; ring*step <= maxR; ring++){
+      const ringR = ring*step;
+      const count = Math.max(3, Math.round(((TAU*ringR)/s) * density));
+      const startA = orient + ring * golden * twist;
+      for(let k=0; k<count; k++){
+        const a = startA + (k/count) * TAU;
+        const cx = Math.cos(a) * ringR, cy = Math.sin(a) * ringR;
+        if(cx < vb.x0-s || cx > vb.x1+s || cy < vb.y0-s || cy > vb.y1+s) continue;
+        emit(cx, cy);
+      }
+    }
+    return;
+  }
+
+  const i0 = Math.floor(vb.x0/s)-1, i1 = Math.ceil(vb.x1/s)+1;
+  const j0 = Math.floor(vb.y0/s)-1, j1 = Math.ceil(vb.y1/s)+1;
+  for(let j=j0;j<j1;j++){
+    for(let i=i0;i<i1;i++){
+      let cx = i*s + s/2, cy = j*s + s/2;
+      if(S.tileType==='brick-row' && (j&1)) cx += s/2;
+      if(S.tileType==='brick-col' && (i&1)) cy += s/2;
+      if(S.tileOffsetX && (j&1)) cx += S.tileOffsetX * s;
+      if(S.tileOffsetY && (i&1)) cy += S.tileOffsetY * s;
+      emit(cx, cy);
+    }
+  }
+}
+
+// Scroll over a value box → step the value up/down
+document.querySelectorAll('aside input.v').forEach(el => {
+  el.addEventListener('wheel', e => {
+    e.preventDefault();
+    const step = parseFloat(el.step) || 1;
+    const mult = e.shiftKey ? 10 : 1;
+    const dir = e.deltaY > 0 ? -1 : 1;
+    const cur = parseFloat(el.value) || 0;
+    const min = parseFloat(el.min), max = parseFloat(el.max);
+    let next = cur + dir * step * mult;
+    if(!isNaN(min)) next = Math.max(min, next);
+    if(!isNaN(max)) next = Math.min(max, next);
+    const dec = (step.toString().split('.')[1] || '').length;
+    next = parseFloat(next.toFixed(dec));
+    el.value = next;
+    el.dispatchEvent(new Event('input', {bubbles:true}));
+    el.dispatchEvent(new Event('change', {bubbles:true}));
+  }, {passive:false});
+});
+
+// Capture undo history when a control is committed.
+// Arm on pointerdown/focus → push the pre-change snapshot on `change`.
+(function trackHistory(){
+  let armed = null;
+  const arm = () => { armed = snapshot(); };
+  document.querySelectorAll('aside input, aside select').forEach(el => {
+    el.addEventListener('pointerdown', arm);
+    el.addEventListener('focus', arm);
+    el.addEventListener('change', () => {
+      if(armed){
+        if(armed !== snapshot()) pushHistory(armed);
+        armed = null;
+      }
+    });
+  });
+})();
+
+resize();
+updateSelPill();
+renderAList();
+</script>
+</body>
+</html>
