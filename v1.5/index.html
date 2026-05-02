@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5.17 — pixel pattern designer</title>
+<title>pixpat v1.5.18 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#08090c; --panel:rgba(20,22,28,.72); --panel2:#1c1f25; --line:rgba(255,255,255,.08);
@@ -413,6 +413,7 @@
       <label class="chk" style="margin-top:4px"><input id="aMagLock" type="checkbox" checked> magnet locked to center</label>
       <button id="resetMag" style="margin-top:-2px" title="Reset magnetic anchor to the geometry centroid">↻ reset magnet to center</button>
       <label id="aInvertedRow" class="chk" style="margin-top:4px;display:none"><input id="aInverted" type="checkbox" checked> invert gradient direction</label>
+      <label id="aSolidRow" class="chk" style="margin-top:4px;display:none"><input id="aSolid" type="checkbox" checked> solid (whole shape attracts)</label>
       <div class="row"><label>Curve</label>
         <input id="aCurve" type="range" min="0.3" max="4" value="1.7" step="0.05">
         <input class="v" id="aCurveV" type="number" min="0.3" max="4" step="0.05"></div>
@@ -712,15 +713,19 @@ function fields(x,y){
       t = e;                          // pull magnitude follows the radial falloff
     } else if(a.type==='ellipse'){
       const flat = a._flat || (a._flat = flattenEllipse(a));
-      d = nearestOnPoly(x, y, flat, true)[0];
+      // Solid (default): inside the shape = full strength, outside falls off.
+      // Edge-only (solid === false): peak at the edge, fades both directions.
+      if(a.solid !== false && ellipseNormDist(a, x, y) <= 1){ d = 0; }
+      else { d = nearestOnPoly(x, y, flat, true)[0]; }
       if(d >= a.r) continue;
       t = 1 - d/a.r;
       t = Math.pow(t, a.curve); t = smooth(t);
       v = a.strength * t;
     } else if(a.type==='box'){
       const flat = a._flat || (a._flat = flattenBox(a));
-      // Inside the box → distance 0 (full strength); outside falls off radially.
-      d = isInsideBox(x, y, a) ? 0 : nearestOnPoly(x, y, flat, true)[0];
+      // Same Solid / Edge-only rule as ellipse.
+      if(a.solid !== false && isInsideBox(x, y, a)){ d = 0; }
+      else { d = nearestOnPoly(x, y, flat, true)[0]; }
       if(d >= a.r) continue;
       t = 1 - d/a.r;
       t = Math.pow(t, a.curve); t = smooth(t);
@@ -2454,6 +2459,14 @@ $('aInverted').addEventListener('change', e => {
   a.inverted = e.target.checked;
   draw();
 });
+$('aSolid').addEventListener('change', e => {
+  if(S.selected<0) return;
+  const a = S.attractors[S.selected];
+  if(!a || (a.type !== 'ellipse' && a.type !== 'box')) return;
+  pushHistory();
+  a.solid = e.target.checked;
+  draw();
+});
 function bindACornerR(srcId){
   $(srcId).addEventListener('input', e => {
     if(S.selected<0) return;
@@ -2692,6 +2705,14 @@ function selectAttractor(i){
     } else {
       invRow.style.display = 'none';
     }
+    // Ellipse / box: solid (whole shape attracts) vs edge-only.
+    const solidRow = $('aSolidRow');
+    if(a.type === 'ellipse' || a.type === 'box'){
+      $('aSolid').checked = a.solid !== false;
+      solidRow.style.display = '';
+    } else {
+      solidRow.style.display = 'none';
+    }
     // Box-only: per-attractor corner radius + uniform Size slider. Only
     // "shape" attractors get editable corners — circle/ellipse already
     // round, gradient has no shape.
@@ -2715,6 +2736,7 @@ function selectAttractor(i){
     $('aInvertedRow').style.display = 'none';
     $('boxCornerRow').style.display = 'none';
     $('boxSizeRow').style.display = 'none';
+    $('aSolidRow').style.display = 'none';
   }
   updateSelPill();
   // Light-touch update — preserve any active rename input by leaving the
@@ -3091,8 +3113,8 @@ cnv.addEventListener('mousedown', e => {
       pushHistory();
       let att;
       if(t==='gradient')      att = { ...aBase(), type:'gradient', a:[wx,wy], b:[wx,wy], mag:[wx,wy], inverted:true };
-      else if(t==='ellipse')  att = { ...aBase(), type:'ellipse', x:wx, y:wy, rx:1, ry:1, rot:0, mag:[wx,wy] };
-      else                    att = { ...aBase(), type:'box', x:wx, y:wy, w:2, h:2, rot:0, cornerR:0, mag:[wx,wy] };
+      else if(t==='ellipse')  att = { ...aBase(), type:'ellipse', x:wx, y:wy, rx:1, ry:1, rot:0, mag:[wx,wy], solid:true };
+      else                    att = { ...aBase(), type:'box', x:wx, y:wy, w:2, h:2, rot:0, cornerR:0, mag:[wx,wy], solid:true };
       const i = addAttractor(att);
       if(t==='gradient')      drag = { i, vertex:1, lastX:wx, lastY:wy };
       else if(t==='ellipse')  drag = { i, vertex:'createEllipse', startX:wx, startY:wy, lastX:wx, lastY:wy };
