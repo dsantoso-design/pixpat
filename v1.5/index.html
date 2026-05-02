@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5.14 — pixel pattern designer</title>
+<title>pixpat v1.5.15 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#08090c; --panel:rgba(20,22,28,.72); --panel2:#1c1f25; --line:rgba(255,255,255,.08);
@@ -156,6 +156,12 @@
   details.fold[open] > summary{color:var(--accent);border-color:var(--ring)}
   details.fold[open] > summary::after{transform:rotate(180deg);color:var(--accent)}
   details.fold > .body{padding-top:8px}
+  /* Styled label that opens a hidden <input type="file">. */
+  .fileBtn{display:block;width:100%;background:rgba(255,255,255,.04);
+    color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:7px 10px;font:inherit;cursor:pointer;text-align:center;
+    transition:background .12s ease, border-color .12s ease, color .12s ease}
+  .fileBtn:hover{background:rgba(255,255,255,.07);border-color:var(--line-strong);color:var(--accent)}
 </style>
 </head>
 <body>
@@ -177,7 +183,9 @@
     <div class="section">
       <h2>Shape</h2>
       <!-- Every shape is a polygon preset that loads into the customPts
-           buffer; the editor below is always available for tweaks. -->
+           buffer; the editor below is always available for tweaks. The last
+           tile (↑) opens a file picker — uploaded image is traced into a
+           polygon and used as the cell shape. -->
       <div class="shape-grid" id="shapePresets">
         <button data-p="square"      title="Square">▢</button>
         <button data-p="circle"      title="Circle">○</button>
@@ -188,8 +196,9 @@
         <button data-p="tri2"        title="Two triangles">▲▼</button>
         <button data-p="bar"         title="Rectangular bar">▬</button>
         <button data-p="hex"         title="Hexagon">⬣</button>
-        <button data-p="houndstooth" title="Houndstooth">▦</button>
+        <button id="shapeUploadBtn"  title="Upload image as shape">↑</button>
       </div>
+      <input id="shapeUploadFile" type="file" accept="image/*" style="display:none">
       <details class="fold" id="shapeEditFold">
         <summary>Edit shape</summary>
         <div class="body" id="customBox">
@@ -210,22 +219,6 @@
           </div>
         </div>
       </details>
-    </div>
-
-    <div class="section">
-      <h2>Presets</h2>
-      <select id="presetList" title="Pick a preset to load"></select>
-      <div class="seg two" style="margin-top:6px">
-        <button id="presetSave">Save current</button>
-        <button id="presetDelete" class="danger">Delete</button>
-      </div>
-      <!-- Download / Import are hidden for now; the wiring is still active so
-           we can re-enable them later with display:flex. -->
-      <div class="seg two" id="presetIO" style="display:none">
-        <button id="presetExport">Download .json</button>
-        <button id="presetImport">Import .json</button>
-      </div>
-      <input id="presetFile" type="file" accept=".json,application/json" style="display:none">
     </div>
 
     <div class="section">
@@ -281,10 +274,26 @@
     </div>
 
     <div class="section">
+      <h2>Presets</h2>
+      <select id="presetList" title="Pick a preset to load"></select>
+      <div class="seg two" style="margin-top:6px">
+        <button id="presetSave">Save current</button>
+        <button id="presetDelete" class="danger">Delete</button>
+      </div>
+      <!-- Download / Import are hidden for now; the wiring is still active so
+           we can re-enable them later with display:flex. -->
+      <div class="seg two" id="presetIO" style="display:none">
+        <button id="presetExport">Download .json</button>
+        <button id="presetImport">Import .json</button>
+      </div>
+      <input id="presetFile" type="file" accept=".json,application/json" style="display:none">
+    </div>
+
+    <div class="section">
       <h2>Reference image</h2>
-      <input id="imgFile" type="file" accept="image/*"
-        style="width:100%;font-size:11px;color:var(--muted);background:var(--panel2);
-          border:1px solid var(--line);border-radius:6px;padding:4px 6px;cursor:pointer">
+      <!-- Native file input is hidden; the styled label below opens it. -->
+      <input id="imgFile" type="file" accept="image/*" style="display:none">
+      <label for="imgFile" class="fileBtn" id="imgFileLabel">Upload file</label>
       <!-- Per-image controls only appear once an image is loaded. -->
       <div id="imgControls" style="display:none">
         <div class="row" style="margin-top:6px"><label>Opacity</label>
@@ -301,20 +310,17 @@
 
     <div class="section">
       <h2>Export</h2>
-      <label style="color:var(--muted);font-size:12px;display:block;margin-bottom:4px">
-        PNG resolution
-      </label>
-      <select id="pngScale" style="width:100%;margin-bottom:6px">
-        <option value="1">1× (screen)</option>
-        <option value="2" selected>2×</option>
-        <option value="3">3×</option>
-        <option value="4">4×</option>
-        <option value="6">6×</option>
-        <option value="8">8×</option>
-      </select>
-      <div class="seg two">
-        <button id="png">PNG</button>
-        <button id="svg">SVG</button>
+      <div style="display:flex;gap:6px;align-items:stretch">
+        <select id="pngScale" style="flex:1;min-width:0">
+          <option value="1">1×</option>
+          <option value="2" selected>2×</option>
+          <option value="3">3×</option>
+          <option value="4">4×</option>
+          <option value="6">6×</option>
+          <option value="8">8×</option>
+        </select>
+        <button id="png" style="flex:0 0 auto;width:auto;margin:0;padding:6px 14px">PNG</button>
+        <button id="svg" style="flex:0 0 auto;width:auto;margin:0;padding:6px 14px">SVG</button>
       </div>
     </div>
   </aside>
@@ -1664,8 +1670,12 @@ const SHAPE_PRESETS = {
   ] },
   bar:     { closed:true, pts:[[-0.45,-0.1],[0.45,-0.1],[0.45,0.1],[-0.45,0.1]] },
   hex:     { closed:true, pts:(()=>{
-    const a=[]; for(let k=0;k<6;k++){ const t=-Math.PI/2 + k*TAU/6;
-      a.push([Math.cos(t)*0.5, Math.sin(t)*0.5]); } return a;
+    // Stretched pointy-top hex sized so tiles tessellate the brick-by-row
+    // grid (s row pitch, s/2 horizontal offset on odd rows) when Scale = max
+    // (sp = 1.5). At sp = 1 the tiles leave a small gap; at sp = 1.5 they
+    // join edge-to-edge with zero overlap.
+    const x = 1/3, y = 5/12;     // → world (s/2, 5s/8) at sp=1.5
+    return [[0,-y], [x,-0.25], [x,0.25], [0,y], [-x,0.25], [-x,-0.25]];
   })() },
   houndstooth: { closed:true, pts:[
     [-0.5,-0.25],[-0.25,-0.25],[-0.25,-0.5],[ 0.25,-0.5],
@@ -1696,9 +1706,103 @@ function syncShapeIcon(){
     b.classList.toggle('on', b.dataset.p === S.shape));
 }
 document.querySelectorAll('#shapePresets button').forEach(b=>{
+  if(b.id === 'shapeUploadBtn') return;
   b.addEventListener('click', () => loadShapePreset(b.dataset.p));
 });
 syncShapeIcon();
+
+// ---------- image → custom shape ----------
+// User uploads an image; we threshold it to a binary mask, trace the outer
+// contour with Moore-neighbour following, downsample to ~64 vertices, then
+// normalize to the cell-half coord space ([-0.5, 0.5]) and load into
+// S.customPts. Result is editable in the shape editor like any preset.
+function imageToShapePts(img){
+  const sz = 128;
+  const cv = document.createElement('canvas');
+  cv.width = sz; cv.height = sz;
+  const ictx = cv.getContext('2d');
+  ictx.fillStyle = '#fff'; ictx.fillRect(0,0,sz,sz);
+  // Fit image inside sz×sz, preserving aspect.
+  const sc = Math.min(sz/img.width, sz/img.height);
+  const dw = img.width*sc, dh = img.height*sc;
+  ictx.drawImage(img, (sz-dw)/2, (sz-dh)/2, dw, dh);
+  const id = ictx.getImageData(0,0,sz,sz).data;
+  const mask = new Uint8Array(sz*sz);
+  // 'in' = opaque AND dark — silhouette pixels.
+  for(let i=0;i<sz*sz;i++){
+    const a = id[i*4+3];
+    const lum = (id[i*4]+id[i*4+1]+id[i*4+2])/3;
+    mask[i] = (a > 128 && lum < 200) ? 1 : 0;
+  }
+  // First 'in' pixel scanning row-major → guaranteed boundary point.
+  let start = -1;
+  for(let i=0; i<sz*sz; i++){ if(mask[i]){ start = i; break; } }
+  if(start < 0) return null;
+  const startX = start % sz, startY = (start/sz)|0;
+  // Moore-neighbour boundary following. Directions clockwise from west.
+  const dirs = [[-1,0],[-1,-1],[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1]];
+  const at = (x,y) => (x>=0 && y>=0 && x<sz && y<sz && mask[y*sz+x] === 1);
+  const path = [[startX, startY]];
+  let cx = startX, cy = startY, prev = 6; // came from south
+  const maxSteps = sz*sz*4;
+  for(let step=0; step<maxSteps; step++){
+    let found = false;
+    for(let i=1; i<=8; i++){
+      const d = (prev + i) % 8;
+      const nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+      if(at(nx, ny)){
+        cx = nx; cy = ny;
+        path.push([cx, cy]);
+        prev = (d + 4) % 8;
+        found = true;
+        break;
+      }
+    }
+    if(!found) break;
+    if(cx === startX && cy === startY && path.length > 2) break;
+  }
+  if(path.length < 4) return null;
+  // Down-sample to ~64 evenly spaced vertices.
+  const target = 64;
+  const out = [];
+  const step = Math.max(1, Math.floor(path.length / target));
+  for(let i=0; i<path.length; i += step) out.push(path[i]);
+  if(out.length < 4) return null;
+  // Normalize to [-0.5, 0.5] preserving aspect (longer dim → 1.0 across).
+  let xMin=Infinity, xMax=-Infinity, yMin=Infinity, yMax=-Infinity;
+  for(const [x,y] of out){
+    if(x<xMin) xMin=x; if(x>xMax) xMax=x;
+    if(y<yMin) yMin=y; if(y>yMax) yMax=y;
+  }
+  const m = Math.max(xMax-xMin, yMax-yMin) || 1;
+  const cxN = (xMin+xMax)/2, cyN = (yMin+yMax)/2;
+  return out.map(([x,y]) => [(x - cxN)/m, (y - cyN)/m]);
+}
+$('shapeUploadBtn').addEventListener('click', () => $('shapeUploadFile').click());
+$('shapeUploadFile').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    const pts = imageToShapePts(img);
+    if(!pts){ alert('Could not trace a shape from that image. Try one with clearer dark/light contrast.'); return; }
+    pushHistory();
+    S.shape = 'image';
+    S.customPts = pts;
+    S.customClosed = true;
+    S.customAngle = 0;
+    $('customAngle').value = 0; $('customAngleV').value = 0;
+    activeSub = -1;
+    syncShapeIcon();
+    drawEditor();
+    draw();
+    e.target.value = '';
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); alert('Could not load that image.'); };
+  img.src = url;
+});
 // First boot: populate customPts from the default shape so the canvas
 // renders as the named icon rather than the legacy triangle stub.
 if(SHAPE_PRESETS[S.shape]){
@@ -2056,6 +2160,7 @@ syncRadialBoxVisibility();
 $('imgFile').addEventListener('change', e => {
   const file = e.target.files && e.target.files[0];
   if(!file) return;
+  $('imgFileLabel').textContent = file.name;
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
@@ -2130,6 +2235,7 @@ $('imgLocked').addEventListener('change',  e => { S.image.locked  = e.target.che
 $('imgRemove').addEventListener('click', () => {
   S.image.el = null; S.image.x = S.image.y = S.image.w = S.image.h = 0;
   $('imgFile').value = '';
+  $('imgFileLabel').textContent = 'Upload file';
   $('imgControls').style.display = 'none';
   draw();
 });
