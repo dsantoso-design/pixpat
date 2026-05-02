@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.5.16 — pixel pattern designer</title>
+<title>pixpat v1.5.17 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#08090c; --panel:rgba(20,22,28,.72); --panel2:#1c1f25; --line:rgba(255,255,255,.08);
@@ -162,6 +162,22 @@
     padding:7px 10px;font:inherit;cursor:pointer;text-align:center;
     transition:background .12s ease, border-color .12s ease, color .12s ease}
   .fileBtn:hover{background:rgba(255,255,255,.07);border-color:var(--line-strong);color:var(--accent)}
+  /* Centered modal — same glass-card aesthetic as the side panels. */
+  #modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.45);backdrop-filter:blur(4px);
+    -webkit-backdrop-filter:blur(4px);z-index:100}
+  #modal.on{display:flex}
+  .modal-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    padding:20px 22px;width:300px;text-align:center}
+  .modal-card h3{margin:0 0 8px;font-size:13px;color:var(--text);font-weight:600;
+    letter-spacing:.02em}
+  .modal-card p{margin:0 0 16px;color:var(--muted);font-size:12px;line-height:1.5}
+  .modal-actions{display:flex;justify-content:center;gap:8px}
+  .modal-actions button{margin:0;width:96px;padding:7px 0}
+  .modal-actions button.primary{border-color:var(--accent);color:var(--accent);
+    background:linear-gradient(180deg,rgba(124,242,193,.14),rgba(124,242,193,.06))}
 </style>
 </head>
 <body>
@@ -412,6 +428,18 @@
       </div>
     </div>
   </aside>
+
+  <!-- Centered modal used for image-upload guidance + future yes/no prompts. -->
+  <div id="modal">
+    <div class="modal-card">
+      <h3 id="modalTitle"></h3>
+      <p id="modalBody"></p>
+      <div class="modal-actions">
+        <button id="modalCancel">Cancel</button>
+        <button id="modalOk" class="primary">OK</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1781,12 +1809,29 @@ function imageToShapePts(img){
   const cxN = (xMin+xMax)/2, cyN = (yMin+yMax)/2;
   return out.map(([x,y]) => [(x - cxN)/m, (y - cyN)/m]);
 }
-$('shapeUploadBtn').addEventListener('click', () => {
-  const ok = confirm(
-    'Image → shape\n\n' +
-    'Best input: black-and-white image with no gradient,\n' +
-    'square aspect (e.g. 128×128 px). Cleaner edges trace better.\n\n' +
-    'Continue?'
+// Centered confirm dialog. Returns a Promise<boolean>.
+function showModal(title, body){
+  return new Promise(resolve => {
+    $('modalTitle').textContent = title;
+    $('modalBody').textContent  = body;
+    $('modal').classList.add('on');
+    const ok = $('modalOk'), cancel = $('modalCancel');
+    const finish = (result) => {
+      $('modal').classList.remove('on');
+      ok.removeEventListener('click', onOk);
+      cancel.removeEventListener('click', onCancel);
+      resolve(result);
+    };
+    const onOk     = () => finish(true);
+    const onCancel = () => finish(false);
+    ok.addEventListener('click', onOk);
+    cancel.addEventListener('click', onCancel);
+  });
+}
+$('shapeUploadBtn').addEventListener('click', async () => {
+  const ok = await showModal(
+    'Upload pattern',
+    'For the best output, use black and white, square aspect ratio.'
   );
   if(ok) $('shapeUploadFile').click();
 });
@@ -2184,9 +2229,30 @@ function resamplePolygon(pts, n){
   }
   return out;
 }
+// Polygon centroid (area-weighted) for a single closed sub-path. Falls back
+// to vertex average for degenerate / collinear inputs. Used to re-center
+// the shape on its centre of mass after resampling.
+function polygonCentroid(pts){
+  let A = 0, cx = 0, cy = 0;
+  for(let i=0; i<pts.length; i++){
+    const [x0,y0] = pts[i];
+    const [x1,y1] = pts[(i+1) % pts.length];
+    const cross = x0*y1 - x1*y0;
+    A  += cross;
+    cx += (x0+x1) * cross;
+    cy += (y0+y1) * cross;
+  }
+  A *= 0.5;
+  if(Math.abs(A) > 1e-9) return [cx/(6*A), cy/(6*A)];
+  // Fallback: vertex average.
+  let sx=0, sy=0; for(const [x,y] of pts){ sx+=x; sy+=y; }
+  return pts.length ? [sx/pts.length, sy/pts.length] : [0,0];
+}
 // Resample S.customPts to `target` total vertices, splitting allocation
-// across sub-paths proportional to their perimeter (≥3 each). Per-vertex
-// corner radii are dropped — the new vertices don't correspond 1:1 to old.
+// across sub-paths proportional to their perimeter (≥3 each). New vertices
+// land on the existing perimeter, so the silhouette is preserved on
+// increases. After resampling the whole shape is re-centred on its
+// centre of mass (area-weighted centroid of the largest sub-path).
 function applyVertexCount(target){
   const subs = splitNullSubpaths(S.customPts);
   if(!subs.length) return;
@@ -2199,11 +2265,21 @@ function applyVertexCount(target){
     return L;
   });
   const totalL = lens.reduce((a,b) => a+b, 0) || 1;
-  const out = [];
-  subs.forEach((sub, k) => {
-    if(k > 0) out.push(null);
+  const resampledSubs = subs.map((sub, k) => {
     const nSub = Math.max(3, Math.round(target * lens[k] / totalL));
-    out.push(...resamplePolygon(sub, nSub));
+    return resamplePolygon(sub, nSub);
+  });
+  // Centre on the largest sub-path's centroid so multi-subpath shapes
+  // preserve their relative arrangement around that anchor.
+  let mainIdx = 0;
+  for(let i=1; i<resampledSubs.length; i++){
+    if(lens[i] > lens[mainIdx]) mainIdx = i;
+  }
+  const [ccx, ccy] = polygonCentroid(resampledSubs[mainIdx]);
+  const out = [];
+  resampledSubs.forEach((sub, k) => {
+    if(k > 0) out.push(null);
+    for(const [x, y] of sub) out.push([x - ccx, y - ccy]);
   });
   pushHistory();
   S.customPts = out;
