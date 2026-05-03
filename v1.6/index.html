@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.6.2 — pixel pattern designer</title>
+<title>pixpat v1.6.3 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#08090c; --panel:rgba(20,22,28,.72); --panel2:#1c1f25; --line:rgba(255,255,255,.08);
@@ -502,6 +502,11 @@
 
 const $ = id => document.getElementById(id);
 const TAU = Math.PI*2;
+const clone = o => JSON.parse(JSON.stringify(o));
+// Toggle the .on class on the option in `selector` whose dataset[attr] matches `value`.
+function setActiveBtn(selector, attr, value){
+  document.querySelectorAll(selector).forEach(b => b.classList.toggle('on', b.dataset[attr] === value));
+}
 
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;
   let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;
@@ -1516,13 +1521,13 @@ const LS_KEY = 'pixpat.presets.v1';
 
 function getPresetState(){
   const o = {};
-  for(const k of PRESET_KEYS) o[k] = JSON.parse(JSON.stringify(S[k]));
+  for(const k of PRESET_KEYS) o[k] = clone(S[k]);
   return o;
 }
 function applyPresetState(state){
   pushHistory();
   for(const k of PRESET_KEYS){
-    if(k in state) S[k] = JSON.parse(JSON.stringify(state[k]));
+    if(k in state) S[k] = clone(state[k]);
   }
   invalidateAllFlat();
   selectAttractor(-1);
@@ -2484,9 +2489,8 @@ $('resetView').addEventListener('click', () => {
 
 document.querySelectorAll('#amode button').forEach(b => {
   b.addEventListener('click', () => {
-    document.querySelectorAll('#amode button').forEach(x => x.classList.remove('on'));
-    b.classList.add('on');
     S.aMode = b.dataset.m;
+    setActiveBtn('#amode button', 'm', S.aMode);
     if(S.selected>=0 && S.attractors[S.selected]){
       S.attractors[S.selected].mode = S.aMode;
       renderAList();
@@ -2535,76 +2539,64 @@ $('resetMag').addEventListener('click', () => {
   $('aMagLock').checked = true;
   draw();
 });
-$('aInverted').addEventListener('change', e => {
-  if(S.selected<0) return;
-  const a = S.attractors[S.selected];
-  if(!a || a.type !== 'gradient') return;
-  pushHistory();
-  a.inverted = e.target.checked;
-  draw();
-});
-$('aSolid').addEventListener('change', e => {
-  if(S.selected<0) return;
-  const a = S.attractors[S.selected];
-  if(!a || !(a.type === 'ellipse' || a.type === 'box' || a.type === 'pen')) return;
-  pushHistory();
-  a.solid = e.target.checked;
-  draw();
-});
-function bindACornerR(srcId){
-  $(srcId).addEventListener('input', e => {
+// Bind a checkbox to a boolean property on the selected attractor. `applies`
+// is an optional predicate (a => boolean) to skip when the type doesn't match.
+// `after` runs once the property is updated, before draw() — used by the
+// magnet-lock handler to freeze the anchor on un-lock.
+function bindAttrToggle(id, prop, applies, after){
+  $(id).addEventListener('change', e => {
     if(S.selected<0) return;
     const a = S.attractors[S.selected];
-    if(!a || a.type !== 'box') return;
-    const v = clamp(parseFloat(e.target.value)||0, 0, 5000);
-    a.cornerR = v;
-    $('aCornerR').value = v;
-    $('aCornerRV').value = Math.round(v);
-    invalidateFlat(a);
+    if(!a || (applies && !applies(a))) return;
+    pushHistory();
+    a[prop] = e.target.checked;
+    if(after) after(a);
     draw();
   });
 }
-bindACornerR('aCornerR');
-bindACornerR('aCornerRV');
-function bindABoxSize(srcId){
-  $(srcId).addEventListener('input', e => {
-    if(S.selected<0) return;
-    const a = S.attractors[S.selected];
-    if(!a || a.type !== 'box') return;
-    const v = clamp(parseFloat(e.target.value)||0, 5, 5000);
-    // Preserve aspect ratio when resizing via the Size slider.
-    const cur = (a.w + a.h) / 2 || 1;
-    const k = v / cur;
-    a.w = Math.max(2, a.w * k);
-    a.h = Math.max(2, a.h * k);
-    $('aBoxSize').value = v;
-    $('aBoxSizeV').value = Math.round(v);
-    invalidateFlat(a);
-    draw();
-  });
+bindAttrToggle('aInverted', 'inverted', a => a.type === 'gradient');
+bindAttrToggle('aSolid',    'solid',    a => a.type === 'ellipse' || a.type === 'box' || a.type === 'pen');
+bindAttrToggle('aMagLock',  'magLocked', null, a => { if(!a.magLocked) a.mag = attractorCentroid(a); });
+
+// Bind a slider+number pair (id and id+'V') to a per-attractor field on the
+// selected box. `apply(a, v)` performs the geometry change and refreshes the
+// inputs; `invalidateFlat` and `draw` are run for you.
+function bindBoxField(id, apply){
+  for(const el of [id, id+'V']){
+    $(el).addEventListener('input', e => {
+      if(S.selected<0) return;
+      const a = S.attractors[S.selected];
+      if(!a || a.type !== 'box') return;
+      apply(a, parseFloat(e.target.value) || 0);
+      invalidateFlat(a);
+      draw();
+    });
+  }
 }
-bindABoxSize('aBoxSize');
-bindABoxSize('aBoxSizeV');
+bindBoxField('aCornerR', (a, v) => {
+  a.cornerR = clamp(v, 0, 5000);
+  $('aCornerR').value  = a.cornerR;
+  $('aCornerRV').value = Math.round(a.cornerR);
+});
+bindBoxField('aBoxSize', (a, v) => {
+  v = clamp(v, 5, 5000);
+  // Preserve aspect ratio when resizing via the Size slider.
+  const cur = (a.w + a.h) / 2 || 1;
+  const k = v / cur;
+  a.w = Math.max(2, a.w * k);
+  a.h = Math.max(2, a.h * k);
+  $('aBoxSize').value  = v;
+  $('aBoxSizeV').value = Math.round(v);
+});
 // Re-sync the Size slider after a free-transform / corner-handle drag.
 function syncBoxSize(){
   if(S.selected < 0) return;
   const a = S.attractors[S.selected];
   if(!a || a.type !== 'box') return;
   const sz = (a.w + a.h) / 2;
-  $('aBoxSize').value = sz;
+  $('aBoxSize').value  = sz;
   $('aBoxSizeV').value = Math.round(sz);
 }
-$('aMagLock').addEventListener('change', e => {
-  if(S.selected<0) return;
-  const a = S.attractors[S.selected];
-  if(!a) return;
-  pushHistory();
-  a.magLocked = e.target.checked;
-  // When unlocking, freeze the anchor at its current centroid so dragging
-  // starts from where it visually was rather than jumping somewhere stale.
-  if(!a.magLocked) a.mag = attractorCentroid(a);
-  draw();
-});
 
 function updateSelPill(){
   const p = $('selPill');
@@ -2758,19 +2750,17 @@ function offsetAttractor(a, dx, dy){
 
 function duplicateAttractor(i, dxWorld, dyWorld){
   const src = S.attractors[i];
-  const clone = JSON.parse(JSON.stringify(src));
-  delete clone._flat;
-  // default offset = 20 screen px (converted to world)
+  const dup = clone(src);
+  delete dup._flat;
   const dx = dxWorld !== undefined ? dxWorld : 20/S.zoom;
   const dy = dyWorld !== undefined ? dyWorld : 20/S.zoom;
-  offsetAttractor(clone, dx, dy);
-  const base = (clone.name || defaultName(src, i)).replace(/ copy( \d+)?$/, '');
-  // Avoid name collision
+  offsetAttractor(dup, dx, dy);
+  const base = (dup.name || defaultName(src, i)).replace(/ copy( \d+)?$/, '');
   let n = 1, candidate;
   do { candidate = n===1 ? `${base} copy` : `${base} copy ${n}`; n++; }
   while(S.attractors.some(a => a.name === candidate));
-  clone.name = candidate;
-  S.attractors.push(clone);
+  dup.name = candidate;
+  S.attractors.push(dup);
   selectAttractor(S.attractors.length-1);
   renderAList();
   draw();
@@ -2803,8 +2793,7 @@ function selectAttractor(i){
     $('aPull').value     = S.aPull;    $('aPullV').value     = S.aPull.toFixed(2);
     $('aStrength').value = a.strength; $('aStrengthV').value = a.strength.toFixed(2);
     $('aCurve').value    = a.curve;    $('aCurveV').value    = a.curve.toFixed(2);
-    document.querySelectorAll('#amode button').forEach(b =>
-      b.classList.toggle('on', b.dataset.m === a.mode));
+    setActiveBtn('#amode button', 'm', a.mode);
     // Magnet centroid lock state — default true if missing (legacy attractors).
     $('aMagLock').checked = a.magLocked !== false;
     // Ellipse-only Size control: show + sync to current rx/ry average.
@@ -3134,7 +3123,7 @@ cnv.addEventListener('mousedown', e => {
               pivotCorner: corners[(c+2)%4],
               pivotCenter: [(bb.x0+bb.x1)/2, (bb.y0+bb.y1)/2],
               start: [wx, wy],
-              startSnap: JSON.parse(JSON.stringify({...selA, _flat:undefined})),
+              startSnap: clone({...selA, _flat:undefined}),
               uniform: e.shiftKey,
               lastX: wx, lastY: wy,
             };
@@ -3589,7 +3578,7 @@ addEventListener('keyup', e => {
 
 function pickTool(t){
   S.tool = t;
-  document.querySelectorAll('#atool button').forEach(b => b.classList.toggle('on', b.dataset.t===t));
+  setActiveBtn('#atool button', 't', t);
   if(t!=='pen' && S.draft) cancelDraft();
   $('toolTag').classList.toggle('on', t==='pen');
   $('gradTag').classList.toggle('on', t==='gradient');
@@ -3661,18 +3650,22 @@ function renderPNGRegion(region, scale){
     draw();
   }
 }
+// `region` is a world-space {x,y,w,h} rectangle; pass null to export the
+// whole live viewport at its current pan/zoom.
 function renderSVGRegion(region){
-  const baseZoom = S.zoom;
-  const pxW = Math.max(1, Math.round(region.w * baseZoom));
-  const pxH = Math.max(1, Math.round(region.h * baseZoom));
   const o = { panX:S.panX, panY:S.panY, w:S.w, h:S.h };
-  S.panX = -region.x * baseZoom;
-  S.panY = -region.y * baseZoom;
-  S.w = pxW; S.h = pxH;
+  if(region){
+    const z = S.zoom;
+    S.panX = -region.x * z;
+    S.panY = -region.y * z;
+    S.w = Math.max(1, Math.round(region.w * z));
+    S.h = Math.max(1, Math.round(region.h * z));
+  }
   try {
-    const parts = [];
-    parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${pxW}" height="${pxH}" viewBox="0 0 ${pxW} ${pxH}">`);
-    parts.push(`<rect width="100%" height="100%" fill="${S.bg}"/>`);
+    const parts = [
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${S.w}" height="${S.h}" viewBox="0 0 ${S.w} ${S.h}">`,
+      `<rect width="100%" height="100%" fill="${S.bg}"/>`,
+    ];
     renderSVGGrid(parts);
     parts.push('</svg>');
     return parts.join('');
@@ -3765,16 +3758,7 @@ function downloadPNG(region, scale, tag){
   link.click();
 }
 function downloadSVG(region, tag){
-  const svg = region ? renderSVGRegion(region) :
-    (() => {
-      const parts = [];
-      parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${S.w}" height="${S.h}" viewBox="0 0 ${S.w} ${S.h}">`);
-      parts.push(`<rect width="100%" height="100%" fill="${S.bg}"/>`);
-      renderSVGGrid(parts);
-      parts.push('</svg>');
-      return parts.join('');
-    })();
-  const blob = new Blob([svg], {type:'image/svg+xml'});
+  const blob = new Blob([renderSVGRegion(region)], {type:'image/svg+xml'});
   const link = document.createElement('a');
   link.download = `pixpat_${S.shape}_${tag}_${Date.now()}.svg`;
   link.href = URL.createObjectURL(blob);
