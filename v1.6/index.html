@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.6 — pixel pattern designer</title>
+<title>pixpat v1.6.1 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#08090c; --panel:rgba(20,22,28,.72); --panel2:#1c1f25; --line:rgba(255,255,255,.08);
@@ -381,7 +381,11 @@
         <button data-t="pen">Pen</button>
         <button data-t="gradient">Grad</button>
       </div>
-      <label class="chk" style="margin-top:6px"><input id="lockAdd" type="checkbox"> lock — clicks won't create new attractors</label>
+      <label class="chk" style="margin-top:6px"><input id="lockAdd" type="checkbox"> lock new attractors</label>
+      <!-- Per-attractor 'solid' lives here so it sits next to the tool that
+           created the attractor. Visible only when an ellipse or box is
+           selected (toggled in selectAttractor). -->
+      <label id="aSolidRow" class="chk" style="margin-top:4px;display:none"><input id="aSolid" type="checkbox" checked> solid (whole shape attracts)</label>
     </div>
 
     <div class="section">
@@ -423,16 +427,23 @@
       <div class="row" id="boxCornerRow" style="display:none"><label>Corner</label>
         <input id="aCornerR" type="range" min="0" max="500" value="0" step="1">
         <input class="v" id="aCornerRV" type="number" min="0" max="500" step="1"></div>
-      <div class="row"><label>Pull</label>
-        <input id="aPull" type="range" min="-1" max="1" value="0" step="0.01">
-        <input class="v" id="aPullV" type="number" min="-1" max="1" step="0.01"></div>
-      <label class="chk" style="margin-top:4px"><input id="aMagLock" type="checkbox" checked> magnet locked to center</label>
-      <button id="resetMag" style="margin-top:-2px" title="Reset magnetic anchor to the geometry centroid">↻ reset magnet to center</button>
       <label id="aInvertedRow" class="chk" style="margin-top:4px;display:none"><input id="aInverted" type="checkbox" checked> invert gradient direction</label>
-      <label id="aSolidRow" class="chk" style="margin-top:4px;display:none"><input id="aSolid" type="checkbox" checked> solid (whole shape attracts)</label>
       <div class="row"><label>Curve</label>
         <input id="aCurve" type="range" min="0.3" max="4" value="1.7" step="0.05">
         <input class="v" id="aCurveV" type="number" min="0.3" max="4" step="0.05"></div>
+      <!-- Magnet setup — Pull + the centroid-lock toggle + reset button.
+           Collapsed by default; opens when the user wants to displace cells
+           toward a custom anchor. -->
+      <details class="fold">
+        <summary>Magnet setup</summary>
+        <div class="body">
+          <div class="row" style="margin:0"><label>Pull</label>
+            <input id="aPull" type="range" min="-1" max="1" value="0" step="0.01">
+            <input class="v" id="aPullV" type="number" min="-1" max="1" step="0.01"></div>
+          <label class="chk" style="margin-top:6px"><input id="aMagLock" type="checkbox" checked> locked to center</label>
+          <button id="resetMag" title="Reset magnetic anchor to the geometry centroid">↻ reset magnet to center</button>
+        </div>
+      </details>
     </div>
 
     <div class="section">
