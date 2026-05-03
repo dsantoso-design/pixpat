@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pixpat v1.6.1 — pixel pattern designer</title>
+<title>pixpat v1.6.2 — pixel pattern designer</title>
 <style>
   :root{
     --bg:#08090c; --panel:rgba(20,22,28,.72); --panel2:#1c1f25; --line:rgba(255,255,255,.08);
@@ -748,6 +748,27 @@ function flattenEllipse(a, steps){
   return out;
 }
 
+// Smoothed radial falloff at distance `d` for an attractor `a`. Returns 0
+// outside the falloff radius; otherwise smooth-stepped (1 - d/r)^curve.
+// Shared by every shape-based branch in fields().
+function radialFalloff(d, a){
+  if(d >= a.r) return 0;
+  let t = 1 - d/a.r;
+  t = Math.pow(t, a.curve);
+  return smooth(t);
+}
+// Even-odd point-in-polygon test on a flat point list. Used for the 'solid'
+// option on a closed pen path so the interior counts as full strength.
+function pointInPolygon(px, py, pts){
+  let inside = false;
+  for(let i=0, j=pts.length-1; i<pts.length; j=i++){
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if(((yi > py) !== (yj > py)) && (px < (xj-xi) * (py-yi) / (yj-yi) + xi)){
+      inside = !inside;
+    }
+  }
+  return inside;
+}
 function fields(x,y){
   const out = {scale:0, hole:0, halftone:0, px:0, py:0};
   if(S.muteAttractors) return out;
@@ -757,48 +778,36 @@ function fields(x,y){
     if(a.type==='gradient'){
       let gt;
       [gt,,,d] = gradientProject(a, x, y);
-      if(d >= a.r) continue;
-      let e = 1 - d/a.r;
-      e = Math.pow(e, a.curve); e = smooth(e);
-      // Inverted (default true): full strength at A, fades to 0 at B.
-      // Off: full strength at B, 0 at A.
+      t = radialFalloff(d, a);
+      if(t === 0) continue;
+      // Inverted (default true): full at A → 0 at B. Off: full at B → 0 at A.
       const dir = (a.inverted !== false) ? (1 - gt) : gt;
-      v = a.strength * dir * e;
-      t = e;                          // pull magnitude follows the radial falloff
-    } else if(a.type==='ellipse'){
-      const flat = a._flat || (a._flat = flattenEllipse(a));
-      // Solid (default): inside the shape = full strength, outside falls off.
-      // Edge-only (solid === false): peak at the edge, fades both directions.
-      if(a.solid !== false && ellipseNormDist(a, x, y) <= 1){ d = 0; }
-      else { d = nearestOnPoly(x, y, flat, true)[0]; }
-      if(d >= a.r) continue;
-      t = 1 - d/a.r;
-      t = Math.pow(t, a.curve); t = smooth(t);
-      v = a.strength * t;
-    } else if(a.type==='box'){
-      const flat = a._flat || (a._flat = flattenBox(a));
-      // Same Solid / Edge-only rule as ellipse.
-      if(a.solid !== false && isInsideBox(x, y, a)){ d = 0; }
-      else { d = nearestOnPoly(x, y, flat, true)[0]; }
-      if(d >= a.r) continue;
-      t = 1 - d/a.r;
-      t = Math.pow(t, a.curve); t = smooth(t);
-      v = a.strength * t;
+      v = a.strength * dir * t;
     } else {
-      if(a.type==='pen'){
+      // Shape attractors: distance to outline (or 0 inside, when 'solid' is on).
+      if(a.type==='ellipse'){
+        const flat = a._flat || (a._flat = flattenEllipse(a));
+        d = (a.solid !== false && ellipseNormDist(a, x, y) <= 1)
+          ? 0 : nearestOnPoly(x, y, flat, true)[0];
+      } else if(a.type==='box'){
+        const flat = a._flat || (a._flat = flattenBox(a));
+        d = (a.solid !== false && isInsideBox(x, y, a))
+          ? 0 : nearestOnPoly(x, y, flat, true)[0];
+      } else if(a.type==='pen'){
         const flat = a._flat || (a._flat = flattenBezier(a.nodes, a.closed));
-        if(flat.length<2) continue;
-        d = nearestOnPoly(x,y, flat, a.closed)[0];
-      } else d = Math.hypot(x-a.x, y-a.y);
-      if(d >= a.r) continue;
-      t = 1 - d/a.r;
-      t = Math.pow(t, a.curve); t = smooth(t);
+        if(flat.length < 2) continue;
+        d = (a.closed && a.solid !== false && pointInPolygon(x, y, flat))
+          ? 0 : nearestOnPoly(x, y, flat, a.closed)[0];
+      } else {                                       // 'point'
+        d = Math.hypot(x-a.x, y-a.y);
+      }
+      t = radialFalloff(d, a);
+      if(t === 0) continue;
       v = a.strength * t;
     }
     out[a.mode] += v;
     // Magnetic pull: cell shifts toward (positive) or away from (negative)
-    // the attractor's anchor point (default = geometry centroid, user-draggable).
-    // Closer cells get pulled a larger fraction of their distance.
+    // the attractor's anchor point (default = geometry centroid).
     const pull = a.pull || 0;
     if(pull && t > 0){
       const m = magPoint(a);
@@ -2537,7 +2546,7 @@ $('aInverted').addEventListener('change', e => {
 $('aSolid').addEventListener('change', e => {
   if(S.selected<0) return;
   const a = S.attractors[S.selected];
-  if(!a || (a.type !== 'ellipse' && a.type !== 'box')) return;
+  if(!a || !(a.type === 'ellipse' || a.type === 'box' || a.type === 'pen')) return;
   pushHistory();
   a.solid = e.target.checked;
   draw();
@@ -2817,9 +2826,11 @@ function selectAttractor(i){
     } else {
       invRow.style.display = 'none';
     }
-    // Ellipse / box: solid (whole shape attracts) vs edge-only.
+    // Ellipse / box / pen: solid (whole shape attracts) vs edge-only.
+    // For pen the toggle still appears for open paths, but the field code
+    // only honours it when the path is closed (no interior otherwise).
     const solidRow = $('aSolidRow');
-    if(a.type === 'ellipse' || a.type === 'box'){
+    if(a.type === 'ellipse' || a.type === 'box' || a.type === 'pen'){
       $('aSolid').checked = a.solid !== false;
       solidRow.style.display = '';
     } else {
@@ -2887,7 +2898,7 @@ function cancelDraft(){ S.draft = null; draw(); }
 function commitDraft(closed){
   if(!S.draft || S.draft.nodes.length<2){ S.draft = null; draw(); return; }
   pushHistory();
-  const newPen = { ...aBase(), type:'pen', nodes:S.draft.nodes, closed:!!closed };
+  const newPen = { ...aBase(), type:'pen', nodes:S.draft.nodes, closed:!!closed, solid:true };
   newPen.mag = attractorCentroid(newPen);
   S.draft = null;
   addAttractor(newPen);
