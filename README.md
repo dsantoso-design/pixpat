@@ -1,5 +1,20 @@
 # pixpat
 
+> **⚠️ ACTIVE DEVELOPMENT HAS MOVED**
+>
+> As of **2026-05-12**, the live pixpat file is:
+>
+> **`c:\Users\dsant\projects\code\pixpat-web\public\pixpat.html`**
+>
+> That's the single file to edit going forward. It's served at `localhost:3000`
+> by the Next.js shell and (eventually) by Vercel in production.
+>
+> **The version folders below are frozen historical snapshots.** Do not edit
+> them — changes won't show up on the website. Keep them as a record of how
+> the tool evolved.
+
+---
+
 Single-file HTML pixel-pattern designer. Tile a grid of cells (square, dot, star, custom polygon, etc.) and use spatial **attractors** — points, ellipses, pen paths, gradients — to scale, fade, or punch holes through the pattern. Export PNG or SVG.
 
 No build step. Open the `index.html` file in any modern browser.
