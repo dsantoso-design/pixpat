@@ -194,6 +194,50 @@
     font-size:11px;letter-spacing:.06em;pointer-events:none}
   #snipRect{position:absolute;display:none;border:1.5px solid var(--accent);
     background:rgba(124,242,193,.08);box-shadow:0 0 0 9999px rgba(0,0,0,.55)}
+
+  /* First-visit onboarding sticker */
+  #onboard{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.55);z-index:90}
+  #onboard.on{display:flex}
+  #onboard .ob-card{position:relative;width:380px;max-width:calc(100vw - 48px);
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px 20px 16px;display:flex;flex-direction:column;gap:12px;
+    backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+    box-shadow:0 12px 32px rgba(0,0,0,.5)}
+  #onboard .ob-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  #onboard .ob-title{font-size:11px;font-weight:600;letter-spacing:0.14em;
+    text-transform:uppercase;color:var(--accent)}
+  #onboard .ob-step{font-size:11px;color:var(--muted);
+    font-variant-numeric:tabular-nums;letter-spacing:0.04em}
+  #onboard .ob-close{position:absolute;top:8px;right:10px;width:24px;height:24px;
+    background:transparent;border:0;color:var(--muted);font-size:13px;
+    cursor:pointer;padding:0;margin:0;line-height:1;border-radius:6px}
+  #onboard .ob-close:hover{color:var(--text);background:rgba(255,255,255,.06);border:0}
+  #onboard h4{font-size:15px;font-weight:600;letter-spacing:-0.01em;
+    color:var(--text);margin:0 0 8px}
+  #onboard ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:7px}
+  #onboard li{font-size:12px;line-height:1.5;color:var(--muted);
+    padding-left:14px;position:relative}
+  #onboard li::before{content:"";position:absolute;left:0;top:8px;
+    width:4px;height:4px;border-radius:50%;background:var(--muted)}
+  #onboard li b{color:var(--text);font-weight:500}
+  #onboard .ob-actions{display:flex;justify-content:space-between;align-items:center;
+    gap:8px;margin-top:2px;padding-top:12px;border-top:1px solid var(--line)}
+  #onboard .ob-dots{display:flex;gap:5px}
+  #onboard .ob-dot{width:6px;height:6px;border-radius:50%;background:var(--line);
+    transition:background .15s}
+  #onboard .ob-dot.on{background:var(--muted)}
+  #onboard .ob-btns{display:flex;gap:8px}
+  #onboard .ob-btns button{width:auto;padding:6px 14px;margin:0;
+    font-size:12px;font-weight:500;
+    background:transparent;color:var(--text);border:1px solid var(--line);
+    border-radius:6px;cursor:pointer}
+  #onboard .ob-btns button:hover{border-color:var(--accent);
+    background:rgba(124,242,193,.06);color:var(--text)}
+  #onboard .ob-btns .primary{background:var(--accent);color:var(--bg);
+    border-color:var(--accent);font-weight:600}
+  #onboard .ob-btns .primary:hover{filter:brightness(1.05);
+    background:var(--accent);color:var(--bg);border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -242,9 +286,6 @@
           <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.35">
             Click to add a vertex · drag (Ctrl: snap) · dbl-click to remove · shift+click to start a new sub-shape · <b id="vCount" style="color:var(--text)">0</b> vertices
           </div>
-          <div class="row" style="margin-top:6px"><label>Vertices</label>
-            <input id="vertResample" type="range" min="3" max="128" value="32" step="1">
-            <input class="v" id="vertResampleV" type="number" min="3" max="128" step="1"></div>
           <label class="chk" style="margin-top:6px;display:flex;align-items:center;gap:6px">
             <input id="liveCorner" type="checkbox"> Live corners (per-vertex roundness)
           </label>
@@ -259,13 +300,13 @@
     <div class="section">
       <h2>Geometry</h2>
       <div class="row"><label>Scale</label>
-        <input id="scale" type="range" min="0.1" max="1.5" value="0.23" step="0.01">
+        <input id="scale" type="range" min="0.1" max="1.5" value="0.25" step="0.01">
         <input class="v" id="scaleV" type="number" min="0.1" max="1.5" step="0.01"></div>
       <div class="row"><label>Zoom</label>
         <input id="size" type="range" min="4" max="120" value="42" step="1">
         <input class="v" id="sizeV" type="number" min="4" max="120" step="1"></div>
       <div class="row" id="cornerRow"><label>Round corner</label>
-        <input id="corner" type="range" min="0" max="50" value="0" step="1">
+        <input id="corner" type="range" min="0" max="50" value="20" step="1">
         <input class="v" id="cornerV" type="number" min="0" max="50" step="1"></div>
       <div class="row"><label>Stroke</label>
         <input id="stroke" type="range" min="0" max="6" value="0" step="0.1">
@@ -407,7 +448,7 @@
     <div class="section">
       <h2>Values</h2>
       <div class="row"><label>Strength</label>
-        <input id="aStrength" type="range" min="-1" max="1" value="-1" step="0.01">
+        <input id="aStrength" type="range" min="-1" max="1" value="0.85" step="0.01">
         <input class="v" id="aStrengthV" type="number" min="-1" max="1" step="0.01"></div>
       <div class="row"><label>Radius</label>
         <input id="aFalloff" type="range" min="20" max="1200" value="420" step="2">
@@ -495,6 +536,29 @@
     <div id="snipHint">Drag to select export area · Esc to cancel</div>
     <div id="snipRect"></div>
   </div>
+
+  <!-- First-visit onboarding sticker; persists dismissal in localStorage -->
+  <div id="onboard">
+    <div class="ob-card">
+      <button class="ob-close" id="obClose" aria-label="Dismiss">✕</button>
+      <div class="ob-head">
+        <span class="ob-title" id="obTitle">EDIT SHAPE</span>
+        <span class="ob-step" id="obStep">1 / 3</span>
+      </div>
+      <div id="obBody"></div>
+      <div class="ob-actions">
+        <div class="ob-dots">
+          <span class="ob-dot on"></span>
+          <span class="ob-dot"></span>
+          <span class="ob-dot"></span>
+        </div>
+        <div class="ob-btns">
+          <button id="obBack">Back</button>
+          <button id="obNext" class="primary">Next →</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -531,13 +595,13 @@ function mixHex(a,b,t){
 }
 
 const S = {
-  shape:'dot', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
+  shape:'square', tileType:'regular', tileOffsetX:0, tileOffsetY:0,
   radialSpacing:0.82, radialDensity:0.97, radialTwist:0, radialOrient:198,
   customPts:[[0,-0.5],[0.5,0.5],[-0.5,0.5]], customClosed:true, customAngle:0,
-  size:42, scale:0.23, corner:0, stroke:0,
+  size:42, scale:0.25, corner:20, stroke:0,
   attractors:[], selected:-1,
   tool:'point', draft:null, mouseW:[0,0],
-  aMode:'scale', aStrength:-1, aFalloff:420, aPull:0, aCurve:1.7, aEllipseSize:100,
+  aMode:'scale', aStrength:0.85, aFalloff:420, aPull:0, aCurve:1.7, aEllipseSize:100,
   bg:'#0d0e10', fg:'#e7e9ee', fill:true,
   muteAttractors:false, hideAttractors:false, liveCorner:false,
   zoom:1, panX:0, panY:0,
@@ -1904,7 +1968,7 @@ function showModal(title, body){
 $('shapeUploadBtn').addEventListener('click', async () => {
   const ok = await showModal(
     'Upload pattern',
-    'For the best output, use black and white, square aspect ratio.'
+    'Use a black-and-white image at exactly 128 × 128 px (square).'
   );
   if(ok) $('shapeUploadFile').click();
 });
@@ -2361,15 +2425,10 @@ function applyVertexCount(target){
 }
 function syncVertexCountSlider(){
   const n = S.customPts.filter(p => p !== null).length;
-  $('vertResample').value = clamp(n, 3, 128);
-  $('vertResampleV').value = n;
+  const r = $('vertResample'), rv = $('vertResampleV');
+  if(r) r.value = clamp(n, 3, 128);
+  if(rv) rv.value = n;
 }
-$('vertResample').addEventListener('input', e => {
-  applyVertexCount(parseInt(e.target.value, 10) || 3);
-});
-$('vertResampleV').addEventListener('input', e => {
-  applyVertexCount(parseInt(e.target.value, 10) || 3);
-});
 function syncRadialBoxVisibility(){
   $('radialBox').style.display = (S.tileType === 'radial') ? '' : 'none';
 }
@@ -3921,6 +3980,54 @@ document.querySelectorAll('aside input.v').forEach(el => {
 resize();
 updateSelPill();
 renderAList();
+
+// First-visit onboarding sticker
+const ONBOARD_PAGES = [
+  {title:'EDIT SHAPE', heading:'Build the unit', items:[
+    'Pick a built-in: <b>Square · Dot · Diamond · Bar</b>',
+    'Or draw your own in <b>Edit Shape</b> — click to add a vertex, drag to move, dbl-click to remove',
+    'Upload a <b>128 × 128 b&amp;w image</b> with the ↑ button — it gets traced into a polygon',
+    'Toggle <b>Live corners</b> for per-vertex roundness'
+  ]},
+  {title:'ATTRACTOR', heading:'Bend the field', items:[
+    'Click anywhere on the canvas to <b>drop an attractor</b>; drag to reposition',
+    '<b>Strength</b>: −1 repel → +1 attract. Default 0.85',
+    '<b>Falloff</b> = the dotted radius ring; <b>Curve</b> shapes the gradient',
+    '<b>Mode</b> sets what gets bent: scale, halftone, gradient…',
+    'Stack multiple attractors for layered behavior'
+  ]},
+  {title:'PRESET & EXPORT', heading:'Save and ship', items:[
+    'Try a <b>built-in preset</b> from the Presets dropdown',
+    'Save your own composition; export the JSON to share',
+    '<b>Export PNG</b> — pick resolution for posters, web, social',
+    '<b>Export SVG</b> — vector, ready for Alias / Blender / Illustrator'
+  ]}
+];
+let obIndex = 0;
+function obRender(){
+  const p = ONBOARD_PAGES[obIndex];
+  $('obTitle').textContent = p.title;
+  $('obStep').textContent = (obIndex+1) + ' / ' + ONBOARD_PAGES.length;
+  $('obBody').innerHTML = '<h4>' + p.heading + '</h4><ul>' +
+    p.items.map(t => '<li>' + t + '</li>').join('') + '</ul>';
+  document.querySelectorAll('#onboard .ob-dot').forEach((d,i) =>
+    d.classList.toggle('on', i === obIndex));
+  $('obBack').style.visibility = obIndex === 0 ? 'hidden' : 'visible';
+  $('obNext').textContent = obIndex === ONBOARD_PAGES.length-1 ? 'Got it' : 'Next →';
+}
+function obShow(){ obIndex = 0; obRender(); $('onboard').classList.add('on'); }
+function obDismiss(){
+  $('onboard').classList.remove('on');
+  try { localStorage.setItem('pixpat-seen-guide','1'); } catch(e){}
+}
+$('obBack').addEventListener('click', () => { if(obIndex > 0){ obIndex--; obRender(); } });
+$('obNext').addEventListener('click', () => {
+  if(obIndex < ONBOARD_PAGES.length-1){ obIndex++; obRender(); }
+  else obDismiss();
+});
+$('obClose').addEventListener('click', obDismiss);
+$('onboard').addEventListener('click', (e) => { if(e.target === $('onboard')) obDismiss(); });
+try { if(!localStorage.getItem('pixpat-seen-guide')) obShow(); } catch(e){}
 </script>
 </body>
 </html>
